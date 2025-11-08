@@ -1,0 +1,221 @@
+﻿# CẤU TRÚC KHÓA HỌC CHUẨN (Đã Cải Tiến)
+
+chatgpt-learning-course/
+│
+├── course-info.txt              # Metadata khóa học (format chuẩn)
+├── course-thumbnail.jpg         # Ảnh đại diện khóa học (1200x630px)
+├── course-validation.json       # Rules validation cho nội dung
+│
+├── module-01-introduction/      # Prefix 01, 02... để sort
+│   ├── module-info.txt          # Metadata module
+│   │
+│   ├── lesson-01-overview-openai/
+│   │   ├── lesson-info.txt      # Metadata bài học
+│   │   ├── content.txt          # Nội dung chính (markdown format)
+│   │   ├── video-info.txt       # Thông tin video (format chuẩn)
+│   │   ├── quiz.json           # Quiz data (JSON format)
+│   │   └── attachments/         # Tài liệu đính kèm
+│   │       ├── slides.pdf       # Slides (nếu có)
+│   │       └── resources.txt    # Links tài nguyên bổ sung
+│   │
+│   └── lesson-02-registration-guide/
+│       ├── lesson-info.txt
+│       ├── content.txt
+│       ├── video-info.txt
+│       ├── quiz.json
+│       └── attachments/
+│           └── step-by-step-guide.pdf
+│
+├── module-02-personal-assistant/
+│   └── ...
+│
+└── shared-resources/           # Tài nguyên chung
+    ├── syllabus.pdf
+    ├── external-links.txt
+    └── glossary.txt
+
+
+
+
+
+
+# CHI TIẾT FORMAT CÁC FILE CHUẨN:
+
+## 1. course-info.txt (Metadata khóa học - Format chuẩn)
+
+### Basic Information
+COURSE_ID: uuid-generated-automatically
+TITLE: Áp dụng ChatGPT vào Học tập và Công việc
+DESCRIPTION: Giáo trình từ cơ bản đến nâng cao giúp tận dụng ChatGPT như một trợ lý AI đắc lực trong học tập, nghiên cứu và công việc chuyên nghiệp
+CATEGORY: Artificial Intelligence
+SUBCATEGORY: AI Tools for Productivity
+LEVEL: All Levels
+ESTIMATED_HOURS: 40
+LANGUAGE: Vietnamese
+STATUS: published
+VERSION: 1.0
+
+### Metadata
+CREATED_DATE: 2024-11-05
+UPDATED_DATE: 2024-11-05
+AUTHOR: Tú - AI Education Specialist
+INSTRUCTOR_EMAIL: tu@example.com
+
+### Learning Information
+LEARNING_OUTCOMES:
+- Nắm vững các chức năng cốt lõi của ChatGPT và tương tác hiệu quả
+- Áp dụng AI để tìm kiếm, tóm tắt và phân tích thông tin nhanh chóng  
+- Sử dụng ChatGPT để viết, chỉnh sửa và dịch thuật tài liệu chuyên nghiệp
+- Tự động hóa các tác vụ tư duy phản biện và giải quyết vấn đề
+- Tối ưu hóa quy trình làm việc và học tập bằng AI
+
+PREREQUISITES:
+- Kiến thức tin học cơ bản
+- Thiết bị kết nối internet (máy tính hoặc điện thoại)
+- Tài khoản ChatGPT (hướng dẫn đăng ký sẽ cung cấp)
+
+TAGS: chatgpt,ai,artificial-intelligence,productivity,learning,vietnamese
+
+
+## 2. module-info.txt (Metadata module - Format chuẩn)
+
+### Basic Information
+MODULE_ID: uuid-generated-automatically
+TITLE: Hướng dẫn sử dụng ChatGPT hiệu quả trong học tập
+DESCRIPTION: Cung cấp kiến thức toàn diện về đăng ký, sử dụng và tối ưu hóa ChatGPT như trợ lý học tập cá nhân
+ORDER: 1
+ESTIMATED_HOURS: 3
+DIFFICULTY_LEVEL: Beginner
+
+### Dependencies
+PREREQUISITES: []  # Không có module tiên quyết
+NEXT_MODULES: [module-02-personal-assistant]
+
+### Learning Information  
+LEARNING_OUTCOMES:
+- Hiểu rõ mục tiêu và khả năng của OpenAI/ChatGPT
+- Đăng ký và sử dụng thành công tài khoản ChatGPT
+- Thực hiện tương tác cơ bản đầu tiên với ChatGPT
+- Nhận biết vai trò và lợi ích trong học tập/công việc
+
+## 3. lesson-info.txt (Metadata bài học - Format chuẩn)
+
+### Basic Information
+LESSON_ID: uuid-generated-automatically
+TITLE: Tổng quan về OpenAI và ChatGPT
+ORDER: 1
+DURATION_MINUTES: 15
+STATUS: active
+
+### Learning Information
+LEARNING_OUTCOMES:
+- Hiểu rõ mục tiêu thành lập của OpenAI
+- Nắm được định nghĩa và khả năng cơ bản của ChatGPT
+- Nhận diện vai trò và lợi ích trong học tập và công việc
+
+CONTENT_TYPES: text,video,quiz
+PASS_THRESHOLD: 70
+
+
+
+
+## 4. video-info.txt (Thông tin video - Format chuẩn)
+
+### Video Information
+VIDEO_ID: uuid-generated-automatically  
+TYPE: youtube
+URL: https://youtu.be/VulMMy7kM6w?si=0EFmK82tceMw_z2F
+TITLE: Tổng quan về ChatGPT - Mô hình AI thông minh
+DESCRIPTION: Khám phá ChatGPT và các ứng dụng thực tế trong học tập, công việc hàng ngày
+DURATION: 08:45
+LANGUAGE: vi
+
+### Technical Details
+QUALITY: 1080p
+THUMBNAIL: https://i.ytimg.com/vi/VulMMy7kM6w/maxresdefault.jpg
+CAPTIONS_AVAILABLE: true
+TRANSCRIPT_URL: (optional)
+
+### Timestamps (optional)
+CHAPTERS:
+00:00 - Giới thiệu về OpenAI
+02:30 - ChatGPT là gì?
+05:15 - Ứng dụng trong học tập
+07:20 - Kết luận và hướng dẫn tiếp theo
+
+## 5. quiz.json (Quiz data - Format JSON chuẩn)
+
+```json
+{
+  "quiz_metadata": {
+    "quiz_id": "uuid-generated",
+    "title": "Kiểm tra kiến thức về OpenAI và ChatGPT", 
+    "description": "Đánh giá hiểu biết cơ bản về OpenAI, ChatGPT và ứng dụng",
+    "duration_minutes": 10,
+    "pass_threshold": 70,
+    "max_attempts": 3,
+    "question_count": 8
+  },
+  "questions": [
+    {
+      "id": 1,
+      "type": "multiple_choice",
+      "difficulty": "easy",
+      "mandatory": true,
+      "question": "Tổ chức OpenAI được thành lập vào năm nào?",
+      "options": ["2010", "2015", "2020", "2022"],
+      "correct_answer": 1,
+      "explanation": "OpenAI được thành lập năm 2015 với mục tiêu phát triển AI có lợi cho nhân loại",
+      "points": 1
+    },
+    {
+      "id": 2,
+      "type": "short_answer", 
+      "difficulty": "medium",
+      "mandatory": false,
+      "question": "Hãy nêu ít nhất 3 vai trò của ChatGPT trong học tập của sinh viên",
+      "sample_answer": "Hỗ trợ học tập cá nhân, nghiên cứu và sáng tạo, phát triển kỹ năng giao tiếp",
+      "points": 2
+    }
+  ]
+}
+```
+
+## 6. course-validation.json (Rules validation)
+
+```json
+{
+  "file_validation": {
+    "allowed_extensions": {
+      "video": [".mp4", ".webm", ".avi"],
+      "documents": [".pdf", ".txt", ".md"],
+      "presentations": [".pptx", ".pdf"], 
+      "code": [".py", ".js", ".java", ".html", ".css"],
+      "images": [".jpg", ".jpeg", ".png", ".gif"],
+      "archives": [".zip", ".rar"]
+    },
+    "max_file_size_mb": {
+      "video": 500,
+      "documents": 50,
+      "images": 10,
+      "others": 100
+    }
+  },
+  "content_validation": {
+    "required_files": {
+      "course": ["course-info.txt"],
+      "module": ["module-info.txt"],
+      "lesson": ["lesson-info.txt", "content.txt"]
+    },
+    "naming_convention": {
+      "modules": "module-\\d{2}-[a-z-]+",
+      "lessons": "lesson-\\d{2}-[a-z-]+"
+    }
+  }
+}
+
+
+
+
+
+

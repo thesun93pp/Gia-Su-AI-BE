@@ -1,7 +1,7 @@
 # TÀI LIỆU CHI TIẾT CHỨC NĂNG HỆ THỐNG AI LEARNING PLATFORM
 > Người tạo: NGUYỄN NGỌC TUẤN ANH  
 > Phân tích chi tiết chức năng theo vai trò và nhóm chức năng  
-> Ngày cập nhật: 5/11/2025
+> Ngày cập nhật: 2/11/2025
 
 ## MỤC LỤC
 
