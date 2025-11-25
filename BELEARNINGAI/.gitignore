@@ -10,6 +10,7 @@ dist/
 venv/
 .env
 .env.*
+!.env.example
 
 # IDE và hệ điều hành
 .vscode/
