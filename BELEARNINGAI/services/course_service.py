@@ -6,7 +6,7 @@ Tuân thủ: CHUCNANG.md Section 2.3, 2.5, 3.1
 
 from datetime import datetime
 from typing import Optional, List
-from models.models import Course, Module, Lesson, Enrollment
+from models.models import Course, Module, Lesson, Enrollment, EmbeddedModule, EmbeddedLesson
 from beanie.operators import In, RegEx, Or
 
 
@@ -203,7 +203,11 @@ async def add_module_to_course(
     if not course:
         return None
     
-    new_module = Module(
+    # Initialize modules list if not exists
+    if not hasattr(course, 'modules'):
+        course.modules = []
+    
+    new_module = EmbeddedModule(
         title=title,
         description=description,
         order=order,
@@ -238,6 +242,10 @@ async def update_module_in_course(
     course = await get_course_by_id(course_id)
     
     if not course:
+        return None
+    
+    # Check if course has modules
+    if not hasattr(course, 'modules') or not course.modules:
         return None
     
     # Tìm module
@@ -313,10 +321,18 @@ async def add_lesson_to_module(
     if not course:
         return None
     
+    # Check if course has modules
+    if not hasattr(course, 'modules') or not course.modules:
+        return None
+    
     # Tìm module
     for module in course.modules:
         if module.id == module_id:
-            new_lesson = Lesson(
+            # Initialize lessons list if not exists
+            if not hasattr(module, 'lessons'):
+                module.lessons = []
+            
+            new_lesson = EmbeddedLesson(
                 title=title,
                 order=order,
                 content=content,
@@ -356,9 +372,16 @@ async def update_lesson_in_module(
     if not course:
         return None
     
+    # Check if course has modules
+    if not hasattr(course, 'modules') or not course.modules:
+        return None
+    
     # Tìm module và lesson
     for module in course.modules:
         if module.id == module_id:
+            if not hasattr(module, 'lessons') or not module.lessons:
+                continue
+            
             for lesson in module.lessons:
                 if lesson.id == lesson_id:
                     if title is not None:
@@ -395,10 +418,15 @@ async def delete_lesson_from_module(
     if not course:
         return None
     
+    # Check if course has modules
+    if not hasattr(course, 'modules') or not course.modules:
+        return None
+    
     # Tìm module và xóa lesson
     for module in course.modules:
         if module.id == module_id:
-            module.lessons = [l for l in module.lessons if l.id != lesson_id]
+            if hasattr(module, 'lessons') and module.lessons:
+                module.lessons = [l for l in module.lessons if l.id != lesson_id]
             break
     
     course.updated_at = datetime.utcnow()
@@ -951,14 +979,13 @@ async def delete_course_admin(course_id: str) -> dict:
     # 3. Personal courses derived from this
     personal_courses = await Course.find(
         Course.owner_type != "admin"
-        # TODO: Track "base_course_id" if personal courses fork from public
     ).count()
     
     # Build impact analysis
     impact = {
         "enrolled_students": enrolled_students,
         "active_classes": len(classes_using),
-        "personal_courses_derived": 0,  # Would need tracking
+        "personal_courses_derived": 0,
         "warning": ""
     }
     

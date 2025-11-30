@@ -107,7 +107,7 @@ async def handle_get_quiz_detail(
         questions=quiz.questions,  # List of questions với answers
         passing_score=quiz.passing_score,
         max_attempts=quiz.max_attempts,
-        duration_minutes=quiz.duration_minutes,
+        duration_minutes=quiz.time_limit_minutes,  # Use time_limit_minutes from model
         attempts_count=len(attempts),
         user_attempts=attempts[:3]  # 3 attempts gần nhất
     )

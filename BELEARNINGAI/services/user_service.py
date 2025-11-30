@@ -417,8 +417,7 @@ async def list_users_admin(
             "avatar": user.avatar_url,
             "role": user.role,
             "status": user.status,
-            "created_at": user.created_at,
-            "last_login": None  # Note: Last login tracking chưa implement - cần thêm field vào User model và update trong auth_service.login()
+            "created_at": user.created_at
         }
         
         # Add role-specific stats

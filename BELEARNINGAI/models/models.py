@@ -7,13 +7,50 @@ Naming: snake_case theo Python convention
 from datetime import datetime
 from typing import Optional, List
 from beanie import Document, Indexed
-from pydantic import Field, EmailStr
+from pydantic import Field, EmailStr, BaseModel
 import uuid
 
 
 def generate_uuid() -> str:
     """Tạo UUID mới cho document"""
     return str(uuid.uuid4())
+
+
+# ============================================================================
+# EMBEDDED MODELS FOR COURSE (Lesson & Module nested in Course)
+# ============================================================================
+
+class EmbeddedLesson(BaseModel):
+    """Lesson embedded trong Module"""
+    id: str = Field(default_factory=generate_uuid)
+    title: str
+    description: Optional[str] = None
+    order: int
+    content: str = ""
+    content_type: str = "text"
+    duration_minutes: int = 0
+    video_url: Optional[str] = None
+    resources: List[dict] = Field(default_factory=list)
+    quiz_id: Optional[str] = None
+    is_published: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class EmbeddedModule(BaseModel):
+    """Module embedded trong Course"""
+    id: str = Field(default_factory=generate_uuid)
+    title: str
+    description: str
+    order: int
+    difficulty: str = "Basic"
+    estimated_hours: float = 0
+    learning_outcomes: List[dict] = Field(default_factory=list)
+    lessons: List[EmbeddedLesson] = Field(default_factory=list)
+    total_lessons: int = 0
+    total_duration_minutes: int = 0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 # ============================================================================
@@ -219,6 +256,9 @@ class Course(Document):
     # }
     
     prerequisites: List[str] = Field(default_factory=list, description="Yêu cầu kiến thức đầu vào")
+    
+    # Nội dung khóa học - embedded modules và lessons
+    modules: List[EmbeddedModule] = Field(default_factory=list, description="Danh sách modules trong course")
     
     # Thống kê - theo CourseStatistics schema
     total_duration_minutes: int = Field(default=0, description="Tổng thời lượng khóa học (phút)")

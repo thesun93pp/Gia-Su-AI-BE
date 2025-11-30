@@ -147,12 +147,6 @@ async def handle_get_course_progress(
     completed_duration = total_duration * (overall_progress / 100)
     estimated_hours_remaining = max(0, total_duration - completed_duration)
     
-    # Calculate study streak (TODO: implement proper logic)
-    study_streak_days = 0  # Placeholder
-    
-    # Calculate average quiz score (TODO: implement)
-    avg_quiz_score = 0.0  # Placeholder
-    
     return ProgressCourseResponse(
         course_id=course_id,
         course_title=course.title,

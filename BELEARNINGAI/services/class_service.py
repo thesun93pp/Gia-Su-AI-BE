@@ -682,7 +682,6 @@ async def get_student_detail(
         "overall_progress": progress.overall_progress_percent if progress else 0.0,
         "completed_modules": sum(1 for m in modules_detail if m["progress"] == 100.0),
         "total_modules": len(modules_detail),
-        "study_streak_days": 0,  # TODO: Calculate from activity log
         "total_study_time": progress.total_time_spent_minutes / 60.0 if progress else 0.0
     }
     

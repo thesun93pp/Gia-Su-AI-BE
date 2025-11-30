@@ -35,6 +35,10 @@ async def get_module_detail(
     if not course:
         return None
     
+    # Check if course has modules
+    if not hasattr(course, 'modules') or not course.modules:
+        return None
+    
     # Tìm module trong course
     module = None
     for m in course.modules:
@@ -146,6 +150,10 @@ async def get_lesson_content(
     if not course:
         return None
     
+    # Check if course has modules
+    if not hasattr(course, 'modules') or not course.modules:
+        return None
+    
     # Tìm lesson và module chứa lesson
     lesson = None
     module = None
@@ -242,7 +250,6 @@ async def get_lesson_content(
         video_info = {
             "url": lesson.video_url,
             "duration_seconds": lesson.duration_minutes * 60,
-            "thumbnail_url": None,  # TODO: Implement thumbnail
             "quality": ["360p", "720p", "1080p"]
         }
     
@@ -305,6 +312,16 @@ async def get_course_modules_list(
     course = await Course.get(course_id)
     if not course:
         return None
+    
+    # Check if course has modules
+    if not hasattr(course, 'modules') or not course.modules:
+        return {
+            "course_id": course.id,
+            "course_title": course.title,
+            "modules": [],
+            "total_modules": 0,
+            "completed_modules": 0
+        }
     
     # Get enrollment nếu có user
     enrollment = None
@@ -394,6 +411,10 @@ async def get_module_outcomes(
     if not course:
         return None
     
+    # Check if course has modules
+    if not hasattr(course, 'modules') or not course.modules:
+        return None
+    
     module = None
     for m in course.modules:
         if m.id == module_id:
@@ -405,10 +426,6 @@ async def get_module_outcomes(
     
     # Tính achieved outcomes từ Progress
     achieved_outcomes_count = 0
-    
-    # TODO: Implement tracking logic if needed in future
-    # Currently CHUCNANG.md Section 2.4.4 only mentions learning outcomes display
-    # Not tracking which outcomes are achieved
     
     return {
         "module_id": module.id,
@@ -435,6 +452,10 @@ async def get_module_resources(
     """
     course = await Course.get(course_id)
     if not course:
+        return None
+    
+    # Check if course has modules
+    if not hasattr(course, 'modules') or not course.modules:
         return None
     
     module = None

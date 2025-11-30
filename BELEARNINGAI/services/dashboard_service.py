@@ -69,6 +69,10 @@ async def get_student_dashboard(user_id: str) -> Dict:
         if not course:
             continue
         
+        # Check if course has modules
+        if not hasattr(course, 'modules') or not course.modules:
+            continue
+        
         # Iterate qua modules để tìm quiz
         for module in course.modules:
             if module.default_quiz_id:

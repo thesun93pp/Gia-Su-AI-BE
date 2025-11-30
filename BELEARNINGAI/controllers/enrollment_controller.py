@@ -161,7 +161,7 @@ async def handle_list_my_enrollments(
         
         # Tìm next lesson để học tiếp
         next_lesson_info = None
-        if enrollment.status == "active" and course.modules:
+        if enrollment.status == "active" and hasattr(course, 'modules') and course.modules:
             # Tìm lesson đầu tiên chưa hoàn thành
             for module in course.modules:
                 for lesson in module.lessons:
@@ -180,7 +180,10 @@ async def handle_list_my_enrollments(
             id=enrollment.id,
             course_id=enrollment.course_id,
             course_title=course.title,
+            course_description=course.description or "",
             course_thumbnail=course.thumbnail_url,
+            course_level=course.level,
+            instructor_name=course.instructor_name or "N/A",
             status=enrollment.status,
             progress_percent=enrollment.progress_percent,
             enrolled_at=enrollment.enrolled_at,
@@ -290,12 +293,12 @@ async def handle_get_enrollment_detail(
     instructor_name = owner.full_name if owner else "Giảng viên"
     
     # Tính tổng lessons, modules
-    total_lessons = sum(len(module.lessons) for module in course.modules)
-    total_modules = len(course.modules)
+    total_modules = len(course.modules) if hasattr(course, 'modules') and course.modules else 0
+    total_lessons = sum(len(module.lessons) for module in course.modules) if hasattr(course, 'modules') and course.modules else 0
     
     # Tìm next lesson
     next_lesson_info = None
-    if enrollment.status == "active" and course.modules:
+    if enrollment.status == "active" and hasattr(course, 'modules') and course.modules:
         for module in course.modules:
             for lesson in module.lessons:
                 if lesson.id not in enrollment.completed_lessons:
@@ -314,20 +317,18 @@ async def handle_get_enrollment_detail(
         user_id=enrollment.user_id,
         course_id=enrollment.course_id,
         course_title=course.title,
+        course_description=course.description or "",
         course_thumbnail=course.thumbnail_url,
         instructor_name=instructor_name,
         status=enrollment.status,
         progress_percent=enrollment.progress_percent,
-        completed_lessons_count=len(enrollment.completed_lessons),
-        total_lessons_count=total_lessons,
-        completed_modules_count=len(enrollment.completed_modules),
-        total_modules_count=total_modules,
+        completed_lessons=len(enrollment.completed_lessons),
+        total_lessons=total_lessons,
+        completed_modules=len(enrollment.completed_modules),
+        total_modules=total_modules,
         avg_quiz_score=enrollment.avg_quiz_score,
-        total_time_spent_minutes=enrollment.total_time_spent_minutes,
         enrolled_at=enrollment.enrolled_at,
-        last_accessed_at=enrollment.last_accessed_at,
-        completed_at=enrollment.completed_at,
-        next_lesson=next_lesson_info
+        completed_at=enrollment.completed_at
     )
 
 
@@ -401,10 +402,6 @@ async def handle_unenroll_course(
         )
     
     return EnrollmentCancelResponse(
-        enrollment_id=enrollment_id,
-        course_id=enrollment.course_id,
-        status="cancelled",
-        cancelled_at=datetime.utcnow(),
-        progress_preserved=True,
-        message=f"Đã hủy đăng ký khóa học '{course_title}'. Tiến độ học của bạn đã được lưu lại."
+        message=f"Đã hủy đăng ký khóa học '{course_title}' thành công.",
+        note="Tiến độ học của bạn đã được lưu lại và có thể xem lại bất cứ lúc nào."
     )

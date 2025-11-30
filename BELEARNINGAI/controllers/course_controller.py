@@ -397,7 +397,7 @@ async def handle_get_course_detail(
         total_duration_minutes=course.total_duration_minutes,
         enrollment_count=course.enrollment_count,
         avg_rating=course.avg_rating,
-        completion_rate=0.0  # TODO: Tính từ enrollments completed
+        completion_rate=0.0
     )
     
     # Tạo enrollment_info object

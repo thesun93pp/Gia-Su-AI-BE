@@ -85,54 +85,62 @@ async def create_recommendation_from_assessment(
         logger.error(f"Failed to fetch available courses: {str(e)}", exc_info=True)
         available_courses = []
     
-    # Generate recommendations sử dụng AI với available courses
-    try:
-        logger.info("Generating AI recommendations with course context...")
-        ai_recommendations = await generate_course_recommendations(
-            user_learning_history=learning_history,
-            assessment_results=assessment_results,
-            available_courses=available_courses  # CRITICAL: Pass courses to AI
-        )
-        logger.info(f"AI recommendations generated - {len(ai_recommendations.get('recommended_courses', []))} courses")
-    except Exception as e:
-        logger.error(f"AI recommendation generation failed: {str(e)}", exc_info=True)
-        ai_recommendations = {"recommended_courses": [], "learning_path": [], "ai_advice": "Không thể tạo lời khuyên từ AI"}
+    # DATABASE-FIRST APPROACH: Filter enrolled courses first
+    enrolled_course_ids = {e.course_id for e in enrollments}
+    logger.info(f"User already enrolled in {len(enrolled_course_ids)} courses")
     
-    # Build final recommended_courses list từ AI response + course details
+    # Filter out enrolled courses from available_courses
+    unenrolled_courses = [
+        course for course in available_courses 
+        if str(course.id) not in enrolled_course_ids
+    ]
+    logger.info(f"Found {len(unenrolled_courses)} unenrolled courses to recommend")
+    
+    # Build recommended_courses directly from database with simple AI enhancement
     recommended_courses = []
-    ai_course_recs = ai_recommendations.get("recommended_courses", [])
     
-    for idx, rec in enumerate(ai_course_recs):
-        course_id = rec.get("course_id")
-        if not course_id:
-            continue
+    if unenrolled_courses:
+        # Database-first: use actual courses, AI only for reasons
+        try:
+            logger.info("Getting AI reasons for selected courses...")
+            ai_advice = await _get_ai_recommendation_reasons(
+                assessment_results=assessment_results,
+                selected_courses=unenrolled_courses[:5]  # Top 5 only
+            )
+            logger.info("AI reasons generated successfully")
+        except Exception as e:
+            logger.error(f"AI reason generation failed: {str(e)}")
+            ai_advice = {"course_reasons": {}, "general_advice": "Hãy tiếp tục học tập để nâng cao kỹ năng"}
         
-        # Find course from available_courses
-        course = next((c for c in available_courses if str(c.id) == str(course_id)), None)
-        if not course:
-            logger.warning(f"AI recommended course_id {course_id} not found in available courses")
-            continue
+        # Build recommendations with guaranteed valid course_ids
+        for idx, course in enumerate(unenrolled_courses[:5]):
+            course_reason = ai_advice.get("course_reasons", {}).get(
+                str(course.id), 
+                f"Khóa học {course.title} phù hợp với kết quả đánh giá {assessment.category} {assessment.level}"
+            )
+            
+            # Calculate relevance based on assessment gaps
+            relevance_score = _calculate_course_relevance(
+                course, assessment.knowledge_gaps, assessment.proficiency_level
+            )
+            
+            recommended_courses.append({
+                "course_id": course.id,
+                "title": course.title,
+                "category": course.category,
+                "level": course.level,
+                "reason": course_reason,
+                "priority": idx + 1,
+                "relevance_score": relevance_score,
+                "addresses_gaps": _map_course_to_gaps(course, assessment.knowledge_gaps)
+            })
         
-        recommended_courses.append({
-            "course_id": course.id,
-            "title": course.title,
-            "category": course.category,
-            "level": course.level,
-            "reason": rec.get("reason", "Khóa học phù hợp với trình độ"),
-            "priority": rec.get("priority", idx + 1),
-            "relevance_score": 85.0,  # Default score
-            "addresses_gaps": []  # Filled from knowledge_gaps matching
-        })
-    
-    # Fallback: Nếu AI không trả về courses, dùng matching logic cũ
-    if not recommended_courses and available_courses:
-        logger.info("AI returned no courses, using fallback matching...")
-        recommended_courses = await _match_courses_to_recommendations(
-            assessment.category,
-            assessment.proficiency_level,
-            assessment.knowledge_gaps,
-            available_courses[:10]
-        )
+        # Sort by relevance score
+        recommended_courses.sort(key=lambda x: x["relevance_score"], reverse=True)
+        general_ai_advice = ai_advice.get("general_advice", "")
+    else:
+        logger.warning("No unenrolled courses available for recommendation")
+        general_ai_advice = "Bạn đã đăng ký hết các khóa học phù hợp. Hãy hoàn thành các khóa đã đăng ký hoặc thử học ở mức độ cao hơn."
     
     logger.info(f"Final recommended courses count: {len(recommended_courses)}")
     
@@ -143,8 +151,8 @@ async def create_recommendation_from_assessment(
         assessment_session_id=assessment_session_id,
         user_proficiency_level=assessment.proficiency_level or "Beginner",
         recommended_courses=recommended_courses,
-        suggested_learning_order=ai_recommendations.get("learning_path", []),  # Fixed field name
-        ai_personalized_advice=ai_recommendations.get("ai_advice", ""),  # Fixed field name
+        suggested_learning_order=[],  # AI enhancement optional
+        ai_personalized_advice=general_ai_advice,  # From database-first approach
         expires_at=datetime.utcnow() + timedelta(days=30)
     )
     
@@ -192,61 +200,40 @@ async def create_recommendation_from_history(user_id: str) -> Recommendation:
         limit=15
     )
     
-    # Generate recommendations với available courses
-    ai_recommendations = await generate_course_recommendations(
-        user_learning_history=learning_history,
-        available_courses=available_courses
-    )
+    # DATABASE-FIRST: Filter unrolled courses
+    enrolled_course_ids = {h["course_id"] for h in learning_history}
+    unenrolled_courses = [
+        course for course in available_courses 
+        if str(course.id) not in enrolled_course_ids
+    ]
     
-    # Build recommended_courses từ AI response
+    # Build recommendations from database
     recommended_courses = []
-    ai_course_recs = ai_recommendations.get("recommended_courses", [])
-    
-    for idx, rec in enumerate(ai_course_recs):
-        course_id = rec.get("course_id")
-        if not course_id:
-            continue
+    for idx, course in enumerate(unenrolled_courses[:10]):
+        # Simple reason based on learning history patterns
+        user_categories = list(set(h.get("category", "") for h in learning_history))
+        if course.category in user_categories:
+            reason = f"Dựa trên kinh nghiệm học {course.category}, bạn sẽ thích khóa học này"
+        else:
+            reason = f"Mở rộng kiến thức từ {course.category} - lĩnh vực mới thú vị"
         
-        course = next((c for c in available_courses if str(c.id) == str(course_id)), None)
-        if not course:
-            continue
-        
-        # Check chưa enroll
-        enrolled = any(h["course_id"] == str(course.id) for h in learning_history)
-        if not enrolled:
-            recommended_courses.append({
-                "course_id": course.id,
-                "title": course.title,
-                "category": course.category,
-                "level": course.level,
-                "reason": rec.get("reason", f"Dựa trên kinh nghiệm học {course.category}"),
-                "priority": idx + 1,
-                "relevance_score": 80.0,
-                "addresses_gaps": []
-            })
-    
-    # Fallback: Nếu AI không trả về courses
-    if not recommended_courses:
-        for course in available_courses[:10]:
-            enrolled = any(h["course_id"] == str(course.id) for h in learning_history)
-            if not enrolled:
-                recommended_courses.append({
-                    "course_id": course.id,
-                    "title": course.title,
-                    "category": course.category,
-                    "level": course.level,
-                    "reason": f"Dựa trên kinh nghiệm học {course.category}",
-                    "priority": len(recommended_courses) + 1,
-                    "relevance_score": 70.0,
-                    "addresses_gaps": []
-                })
+        recommended_courses.append({
+            "course_id": course.id,
+            "title": course.title,
+            "category": course.category,
+            "level": course.level,
+            "reason": reason,
+            "priority": idx + 1,
+            "relevance_score": 75.0 if course.category in user_categories else 65.0,
+            "addresses_gaps": []
+        })
     
     recommendation = Recommendation(
         user_id=user_id,
         source="learning_history",
         recommended_courses=recommended_courses[:10],
-        suggested_learning_order=ai_recommendations.get("learning_path", []),  # Fixed field name
-        ai_personalized_advice=ai_recommendations.get("ai_advice", ""),  # Fixed field name
+        suggested_learning_order=[],  # Simplified for now
+        ai_personalized_advice="Dựa trên lịch sử học tập, đây là những khóa học phù hợp với bạn",
         expires_at=datetime.utcnow() + timedelta(days=30)
     )
     
@@ -407,6 +394,146 @@ async def _get_available_courses(
     filtered = [c for c in courses if c.level in target_levels][:limit]
     
     return filtered
+
+
+async def _get_ai_recommendation_reasons(
+    assessment_results: Dict,
+    selected_courses: List[Course]
+) -> Dict:
+    """
+    Lấy AI reasons cho courses đã được select từ database
+    
+    Args:
+        assessment_results: Kết quả đánh giá 
+        selected_courses: List courses đã được filter từ database
+        
+    Returns:
+        Dict chứa reasons cho từng course và general advice
+    """
+    try:
+        # Import here to avoid circular import
+        from services.ai_service import model
+        import json
+        
+        # Create simple context
+        gaps_summary = []
+        if assessment_results.get("knowledge_gaps"):
+            gaps_summary = [
+                gap.get("gap_area", "Unknown") 
+                for gap in assessment_results["knowledge_gaps"][:3]
+            ]
+        
+        courses_context = []
+        for course in selected_courses:
+            courses_context.append({
+                "id": str(course.id),
+                "title": course.title,
+                "level": course.level,
+                "description": course.description[:100] + "..."
+            })
+        
+        prompt = f"""
+Dựa trên kết quả đánh giá năng lực:
+- Điểm số: {assessment_results.get('overall_score', 0)}/100
+- Trình độ: {assessment_results.get('proficiency_level', 'Beginner')}
+- Lỗ hổng kiến thức: {', '.join(gaps_summary)}
+
+Hãy đưa ra lý do ngắn gọn (1-2 câu) tại sao nên học từng khóa học sau:
+{json.dumps(courses_context, ensure_ascii=False, indent=2)}
+
+Trả về JSON format:
+{{
+    "course_reasons": {{
+        "course_id_1": "Lý do ngắn gọn...",
+        "course_id_2": "Lý do ngắn gọn..."
+    }},
+    "general_advice": "Lời khuyên chung cho học viên dựa trên kết quả đánh giá"
+}}
+"""
+        
+        response = model.generate_content(prompt)
+        response_text = response.text.strip()
+        
+        # Clean JSON response
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.startswith("```"):
+            response_text = response_text[3:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+        
+        return json.loads(response_text.strip())
+        
+    except Exception as e:
+        # Fallback to simple reasons
+        course_reasons = {}
+        for course in selected_courses:
+            course_reasons[str(course.id)] = f"Khóa học {course.title} phù hợp với trình độ {assessment_results.get('proficiency_level', 'Beginner')}"
+        
+        return {
+            "course_reasons": course_reasons,
+            "general_advice": f"Dựa trên kết quả đánh giá, bạn nên tập trung học các khóa học {assessment_results.get('category', 'cơ bản')} để nâng cao kỹ năng."
+        }
+
+
+def _calculate_course_relevance(
+    course: Course,
+    knowledge_gaps: List[Dict],
+    proficiency_level: str
+) -> float:
+    """
+    Tính độ phù hợp của course dựa trên knowledge gaps
+    
+    Returns:
+        Float score từ 60-95
+    """
+    base_score = 70.0
+    
+    # Bonus for matching level
+    if course.level == proficiency_level:
+        base_score += 10.0
+    elif course.level == "Beginner" and proficiency_level in ["Intermediate", "Advanced"]:
+        base_score += 5.0  # Good for refreshing basics
+    
+    # Bonus for addressing knowledge gaps
+    if knowledge_gaps:
+        gap_keywords = []
+        for gap in knowledge_gaps:
+            gap_area = gap.get("gap_area", "").lower()
+            gap_keywords.extend(gap_area.split())
+        
+        # Check if course title/description contains gap keywords  
+        course_content = f"{course.title} {course.description}".lower()
+        matching_keywords = sum(1 for keyword in gap_keywords if keyword in course_content)
+        
+        if matching_keywords > 0:
+            base_score += min(15.0, matching_keywords * 3.0)  # Max 15 bonus points
+    
+    return min(95.0, base_score)  # Cap at 95
+
+
+def _map_course_to_gaps(course: Course, knowledge_gaps: List[Dict]) -> List[str]:
+    """
+    Map course content to knowledge gaps it addresses
+    
+    Returns:
+        List of gap areas this course can help with
+    """
+    if not knowledge_gaps:
+        return []
+    
+    addresses_gaps = []
+    course_content = f"{course.title} {course.description}".lower()
+    
+    for gap in knowledge_gaps:
+        gap_area = gap.get("gap_area", "").lower()
+        
+        # Simple keyword matching
+        gap_words = gap_area.split()
+        if any(word in course_content for word in gap_words):
+            addresses_gaps.append(gap.get("gap_area", ""))
+    
+    return addresses_gaps[:3]  # Limit to 3 gaps max
 
 
 async def _match_courses_to_recommendations(

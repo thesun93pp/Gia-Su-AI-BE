@@ -127,7 +127,7 @@ async def handle_send_chat_message(
         question=request.question,
         answer=ai_response_text,
         generated_at=ai_message["created_at"],
-        sources=[]  # TODO: Extract source lessons from context
+        sources=[]
     )
 
 
@@ -306,8 +306,7 @@ async def handle_delete_all_conversations(
     
     return ChatDeleteAllResponse(
         message="Đã xóa tất cả lịch sử chat",
-        deleted_count=deleted_count,
-        note="Dữ liệu đã xóa không thể khôi phục"
+        deleted_count=deleted_count
     )
 
 

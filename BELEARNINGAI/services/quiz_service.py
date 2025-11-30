@@ -6,7 +6,9 @@ Tuân thủ: CHUCNANG.md Section 2.4.3-2.4.7
 
 from datetime import datetime
 from typing import Optional, List, Dict
-from models.models import Quiz, QuizAttempt, Class
+import copy
+import random
+from models.models import Quiz, QuizAttempt, Class, User, Lesson, Course, Enrollment
 
 
 # ============================================================================
@@ -175,14 +177,22 @@ async def delete_quiz(quiz_id: str) -> bool:
 
 async def create_quiz_attempt(
     quiz_id: str,
-    user_id: str
+    user_id: str,
+    answers: Optional[List[Dict]] = None,
+    score: Optional[float] = None,
+    passed: Optional[bool] = None,
+    time_spent_minutes: Optional[int] = None
 ) -> Optional[QuizAttempt]:
     """
-    Tạo lần thử quiz mới
+    Tạo và lưu lần thử quiz
     
     Args:
         quiz_id: ID của quiz
         user_id: ID của user
+        answers: List câu trả lời (optional - nếu đã chấm điểm)
+        score: Điểm số (optional - nếu đã chấm điểm)
+        passed: Kết quả đậu/rớt (optional - nếu đã chấm điểm)
+        time_spent_minutes: Thời gian làm bài (phút)
         
     Returns:
         QuizAttempt document đã tạo hoặc None nếu đã hết lượt thử
@@ -194,13 +204,50 @@ async def create_quiz_attempt(
     
     # Kiểm tra số lần đã thử
     previous_attempts = await get_user_quiz_attempts(user_id, quiz_id)
+    attempt_number = len(previous_attempts) + 1
     
-    if len(previous_attempts) >= quiz.max_attempts:
+    if len(previous_attempts) >= quiz.max_attempts and quiz.max_attempts > 0:
         return None  # Đã hết lượt thử
+    
+    # Tính thông tin chi tiết nếu có answers
+    correct_answers = 0
+    total_questions = len(quiz.questions)
+    mandatory_correct = 0
+    mandatory_total = sum(1 for q in quiz.questions if q.get("is_mandatory", False))
+    
+    if answers and score is not None:
+        answer_map = {ans.get("question_id"): ans for ans in answers}
+        
+        for question in quiz.questions:
+            q_id = question.get("question_id") or question.get("id")
+            user_answer_obj = answer_map.get(q_id, {})
+            user_answer = user_answer_obj.get("answer") or user_answer_obj.get("student_answer")
+            correct_answer = question.get("correct_answer")
+            is_mandatory = question.get("is_mandatory", False)
+            
+            if str(user_answer).strip().lower() == str(correct_answer).strip().lower():
+                correct_answers += 1
+                if is_mandatory:
+                    mandatory_correct += 1
+    
+    mandatory_passed = (mandatory_correct == mandatory_total) if mandatory_total > 0 else True
     
     attempt = QuizAttempt(
         quiz_id=quiz_id,
-        user_id=user_id
+        user_id=user_id,
+        answers=answers or [],
+        score=score or 0.0,
+        status="Pass" if passed else "Fail",
+        passed=passed or False,
+        attempt_number=attempt_number,
+        correct_answers=correct_answers,
+        total_questions=total_questions,
+        mandatory_correct=mandatory_correct,
+        mandatory_total=mandatory_total,
+        mandatory_passed=mandatory_passed,
+        submitted_at=datetime.utcnow() if answers else None,
+        time_spent_seconds=(time_spent_minutes * 60) if time_spent_minutes else 0,
+        can_retake=attempt_number < quiz.max_attempts
     )
     
     await attempt.insert()
@@ -281,6 +328,14 @@ async def get_quiz_attempt(attempt_id: str) -> Optional[QuizAttempt]:
         return None
 
 
+# Alias for compatibility
+async def get_quiz_attempt_by_id(attempt_id: str) -> Optional[QuizAttempt]:
+    """
+    Alias for get_quiz_attempt - for compatibility with controller
+    """
+    return await get_quiz_attempt(attempt_id)
+
+
 async def get_user_quiz_attempts(
     user_id: str,
     quiz_id: str
@@ -326,6 +381,152 @@ async def get_best_quiz_score(user_id: str, quiz_id: str) -> Optional[float]:
         return None
     
     return max(a.score for a in submitted)
+
+
+async def grade_quiz_attempt(quiz: Quiz, answers: List[Dict]) -> tuple[float, bool]:
+    """
+    Chấm điểm quiz attempt
+    
+    Business logic:
+    - Tính điểm: % câu đúng
+    - Pass nếu: score >= passing_score VÀ tất cả mandatory questions correct
+    
+    Args:
+        quiz: Quiz object
+        answers: List câu trả lời từ user [{"question_id": "...", "answer": "..."}, ...]
+        
+    Returns:
+        tuple (score: float, passed: bool)
+    """
+    correct_count = 0
+    total_count = len(quiz.questions)
+    mandatory_correct = 0
+    mandatory_total = sum(1 for q in quiz.questions if q.get("is_mandatory", False))
+    
+    answer_map = {ans["question_id"]: ans.get("answer") or ans.get("student_answer") for ans in answers}
+    
+    for question in quiz.questions:
+        q_id = question.get("question_id") or question.get("id")
+        user_answer = answer_map.get(q_id)
+        correct_answer = question.get("correct_answer")
+        is_mandatory = question.get("is_mandatory", False)
+        
+        if str(user_answer).strip().lower() == str(correct_answer).strip().lower():
+            correct_count += 1
+            if is_mandatory:
+                mandatory_correct += 1
+    
+    score = (correct_count / total_count * 100) if total_count > 0 else 0
+    
+    # Pass condition: score >= passing_score AND all mandatory questions correct
+    mandatory_pass = (mandatory_correct == mandatory_total) if mandatory_total > 0 else True
+    passed = (score >= quiz.passing_score) and mandatory_pass
+    
+    return score, passed
+
+
+async def build_quiz_results(quiz: Quiz, attempt: QuizAttempt) -> Dict:
+    """
+    Build chi tiết kết quả quiz với explanation
+    
+    Returns:
+        Dict với structure QuizResultsResponse
+    """
+    answer_map = {ans.get("question_id"): ans for ans in attempt.answers}
+    
+    question_results = []
+    correct_count = 0
+    mandatory_correct = 0
+    mandatory_total = 0
+    
+    for question in quiz.questions:
+        q_id = question.get("question_id") or question.get("id")
+        user_answer_obj = answer_map.get(q_id, {})
+        user_answer = user_answer_obj.get("answer") or user_answer_obj.get("student_answer")
+        correct_answer = question.get("correct_answer")
+        is_mandatory = question.get("is_mandatory", False)
+        
+        is_correct = str(user_answer).strip().lower() == str(correct_answer).strip().lower()
+        
+        if is_correct:
+            correct_count += 1
+            if is_mandatory:
+                mandatory_correct += 1
+        
+        if is_mandatory:
+            mandatory_total += 1
+        
+        question_results.append({
+            "question_id": q_id,
+            "question_content": question.get("question_text", ""),
+            "question_type": question.get("type", "multiple_choice"),
+            "options": question.get("options"),
+            "student_answer": user_answer,
+            "correct_answer": correct_answer,
+            "is_correct": is_correct,
+            "is_mandatory": is_mandatory,
+            "score": question.get("points", 1) if is_correct else 0,
+            "explanation": question.get("explanation"),
+            "related_lesson_link": f"/lessons/{quiz.lesson_id}" if quiz.lesson_id else None
+        })
+    
+    return {
+        "attempt_id": str(attempt.id),
+        "quiz_id": str(quiz.id),
+        "quiz_title": quiz.title,
+        "score": round(attempt.score, 2),
+        "passed": attempt.passed,
+        "status": "pass" if attempt.passed else "fail",
+        "correct_answers": correct_count,
+        "total_questions": len(quiz.questions),
+        "mandatory_correct": mandatory_correct,
+        "mandatory_total": mandatory_total,
+        "mandatory_passed": (mandatory_correct == mandatory_total) if mandatory_total > 0 else True,
+        "time_spent_seconds": attempt.time_spent_seconds,
+        "submitted_at": attempt.submitted_at,
+        "can_retake": len(await get_user_quiz_attempts(attempt.user_id, quiz.id)) < quiz.max_attempts,
+        "question_results": question_results
+    }
+
+
+async def generate_retake_quiz(original_quiz: Quiz) -> Quiz:
+    """
+    Generate quiz mới với câu hỏi tương tự (dùng AI)
+    
+    Args:
+        original_quiz: Quiz gốc
+        
+    Returns:
+        Quiz mới đã tạo
+    """
+    # TODO: Integrate with AI service to generate similar questions
+    # For now, duplicate quiz with shuffled questions
+    
+    new_questions = copy.deepcopy(original_quiz.questions)
+    random.shuffle(new_questions)
+    
+    # Update question IDs
+    for i, q in enumerate(new_questions):
+        q["question_id"] = f"q{i+1}"
+        q["id"] = f"q{i+1}"
+        q["order"] = i + 1
+    
+    new_quiz = Quiz(
+        lesson_id=original_quiz.lesson_id,
+        course_id=original_quiz.course_id,
+        created_by=original_quiz.created_by,
+        title=f"{original_quiz.title} (Retake)",
+        description=f"Retake version of: {original_quiz.description}",
+        questions=new_questions,
+        time_limit_minutes=original_quiz.time_limit_minutes,
+        passing_score=original_quiz.passing_score,
+        max_attempts=original_quiz.max_attempts,
+        question_count=len(new_questions),
+        total_points=sum(q.get("points", 1) for q in new_questions)
+    )
+    
+    await new_quiz.insert()
+    return new_quiz
 
 
 # ============================================================================
@@ -405,8 +606,6 @@ async def list_quizzes_with_filters(
     Returns:
         Dict với data (list QuizListItem), total, skip, limit, has_next
     """
-    from models.models import Lesson, Course, Class
-    
     # Build query
     query_conditions = [Quiz.created_by == instructor_id]
     
@@ -670,8 +869,6 @@ async def get_class_quiz_results(quiz_id: str, class_id: str) -> Dict:
     Returns:
         Dict với statistics, score_distribution, student_ranking, difficult_questions
     """
-    from models.models import Enrollment, User
-    
     quiz = await get_quiz_by_id(quiz_id)
     
     if not quiz:
@@ -765,8 +962,8 @@ async def get_class_quiz_results(quiz_id: str, class_id: str) -> Dict:
         student_ranking.append({
             "rank": rank,
             "user_id": attempt.user_id,
-            "full_name": f"{user.first_name} {user.last_name}" if user else "Unknown",
-            "avatar": user.avatar if user else None,
+            "full_name": user.full_name if user else "Unknown",
+            "avatar": user.avatar_url if user else None,
             "score": round(attempt.score, 2),
             "time_spent": int(attempt.time_spent_seconds / 60),
             "attempt_count": len(user_attempts),
