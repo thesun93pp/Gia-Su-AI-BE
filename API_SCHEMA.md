@@ -3060,7 +3060,7 @@ quiz_id: string (UUID, tùy chọn)
 role: string (student|instructor|admin, tùy chọn)
 status: string (active|inactive|banned, tùy chọn)
 search: string (tìm kiếm theo tên, email, tùy chọn)
-sort_by: string (created_at|last_login|name, mặc định: created_at)
+sort_by: string (created_at|last_login_at|name, mặc định: created_at)
 order: string (asc|desc, mặc định: desc)
 skip: number (pagination)
 limit: number (pagination)
@@ -3077,7 +3077,7 @@ limit: number (pagination)
       "role": "string (student|instructor|admin)",
       "status": "string (active|inactive|banned)",
       "created_at": "datetime",
-      "last_login": "datetime",
+      "last_login_at": "datetime",
       "courses_enrolled": "number (chỉ student)",
       "classes_created": "number (chỉ instructor)"
     }
@@ -3112,7 +3112,7 @@ limit: number (pagination)
   "role": "string (student|instructor|admin)",
   "status": "string (active|inactive|banned)",
   "created_at": "datetime",
-  "last_login": "datetime",
+  "last_login_at": "datetime",
   "profile": {
     "phone": "string (tùy chọn)",
     "bio": "string (tùy chọn)",

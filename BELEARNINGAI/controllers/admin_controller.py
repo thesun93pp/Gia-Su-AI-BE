@@ -15,7 +15,7 @@ from schemas.admin import (
     AdminUpdateUserRequest,
     AdminUpdateUserResponse,
     AdminDeleteUserResponse,
-    AdminChangeUserRoleRequest,
+    AdminChangeRoleRequest,
     AdminChangeRoleResponse,
     AdminResetPasswordRequest,
     AdminResetPasswordResponse,
@@ -38,7 +38,7 @@ from services import admin_service
 
 async def handle_list_users_admin(
     role: Optional[str] = None,
-    status: Optional[str] = None,
+    status_filter: Optional[str] = None,
     keyword: Optional[str] = None,
     sort_by: str = "created_at",
     sort_order: str = "desc",
@@ -58,7 +58,7 @@ async def handle_list_users_admin(
     
     Args:
         role: Lọc theo vai trò (student|instructor|admin)
-        status: Lọc theo trạng thái (active|inactive)
+        status_filter: Lọc theo trạng thái (active|inactive)
         keyword: Tìm kiếm theo tên hoặc email
         sort_by: Sắp xếp theo cột (full_name|email|created_at|role)
         sort_order: Thứ tự (asc|desc)
@@ -88,16 +88,17 @@ async def handle_list_users_admin(
         if limit > 100:
             limit = 100
             
-        users_data = await admin_service.get_users_list(
-            role=role,
-            status=status,
-            keyword=keyword,
+        # Convert skip to page for admin service
+        page = (skip // limit) + 1 if limit > 0 else 1
+            
+        users_data = await admin_service.get_users_list_admin(
+            page=page,
+            limit=limit,
+            search=keyword,
+            role_filter=role,
+            status_filter=status_filter,
             sort_by=sort_by,
-            sort_order=sort_order,
-            created_from=created_from,
-            created_to=created_to,
-            skip=skip,
-            limit=limit
+            sort_order=sort_order
         )
         
         return AdminUserListResponse(**users_data)
@@ -142,7 +143,7 @@ async def handle_get_user_detail_admin(
                 detail="Chỉ admin mới có quyền xem chi tiết người dùng"
             )
         
-        user_detail = await admin_service.get_user_detail(user_id)
+        user_detail = await admin_service.get_user_detail_admin(user_id)
         return AdminUserDetailResponse(**user_detail)
         
     except HTTPException:
@@ -185,7 +186,7 @@ async def handle_create_user_admin(
                 detail="Chỉ admin mới có quyền tạo tài khoản"
             )
         
-        created_user = await admin_service.create_user(user_data.dict(), current_user.get("user_id"))
+        created_user = await admin_service.create_user_admin(user_data.dict())
         return AdminCreateUserResponse(**created_user)
         
     except HTTPException:
@@ -232,7 +233,7 @@ async def handle_update_user_admin(
                 detail="Chỉ admin mới có quyền cập nhật thông tin người dùng"
             )
         
-        updated_user = await admin_service.update_user(user_id, user_data.dict(exclude_unset=True))
+        updated_user = await admin_service.update_user_admin(user_id, user_data.dict(exclude_unset=True))
         return AdminUpdateUserResponse(**updated_user)
         
     except HTTPException:
@@ -277,7 +278,7 @@ async def handle_delete_user_admin(
                 detail="Chỉ admin mới có quyền xóa người dùng"
             )
         
-        deleted_info = await admin_service.delete_user(user_id)
+        deleted_info = await admin_service.delete_user_admin(user_id)
         return AdminDeleteUserResponse(**deleted_info)
         
     except HTTPException:
@@ -291,7 +292,7 @@ async def handle_delete_user_admin(
 
 async def handle_change_user_role_admin(
     user_id: str,
-    role_data: AdminChangeUserRoleRequest,
+    role_data: AdminChangeRoleRequest,
     current_user: Dict
 ) -> AdminChangeRoleResponse:
     """
@@ -324,7 +325,7 @@ async def handle_change_user_role_admin(
                 detail="Chỉ admin mới có quyền thay đổi vai trò"
             )
         
-        role_change_result = await admin_service.change_user_role(user_id, role_data.new_role)
+        role_change_result = await admin_service.change_user_role_admin(user_id, role_data.new_role)
         return AdminChangeRoleResponse(**role_change_result)
         
     except HTTPException:
@@ -371,7 +372,7 @@ async def handle_reset_user_password_admin(
                 detail="Chỉ admin mới có quyền reset mật khẩu"
             )
         
-        reset_result = await admin_service.reset_user_password(user_id, password_data.new_password)
+        reset_result = await admin_service.reset_user_password_admin(user_id, password_data.new_password)
         return AdminResetPasswordResponse(**reset_result)
         
     except HTTPException:
@@ -420,14 +421,18 @@ async def handle_list_courses_admin(
                 detail="Chỉ admin mới có quyền xem tất cả khóa học"
             )
         
-        courses_data = await admin_service.get_courses_list(
-            author=author,
-            status=status,
-            category=category,
-            course_type=course_type,
-            keyword=keyword,
-            skip=skip,
-            limit=limit
+        # Convert skip to page
+        page = (skip // limit) + 1 if limit > 0 else 1
+        
+        courses_data = await admin_service.get_courses_list_admin(
+            page=page,
+            limit=limit,
+            search=keyword,
+            category_filter=category,
+            status_filter=status,
+            instructor_filter=author,
+            sort_by="created_at",
+            sort_order="desc"
         )
         
         return AdminCourseListResponse(**courses_data)
@@ -462,7 +467,8 @@ async def handle_get_course_detail_admin(
                 detail="Chỉ admin mới có quyền xem chi tiết khóa học"
             )
         
-        course_detail = await admin_service.get_course_detail(course_id)
+        from services import course_service
+        course_detail = await course_service.get_course_detail(course_id, current_user.get("user_id"))
         return AdminCourseDetailResponse(**course_detail)
         
     except HTTPException:
@@ -495,7 +501,7 @@ async def handle_create_course_admin(
                 detail="Chỉ admin mới có quyền tạo khóa học chính thức"
             )
         
-        created_course = await admin_service.create_course(course_data.dict(), current_user.get("user_id"))
+        created_course = await admin_service.create_course_admin(course_data.dict())
         return AdminCourseCreateResponse(**created_course)
         
     except HTTPException:
@@ -530,7 +536,7 @@ async def handle_update_course_admin(
                 detail="Chỉ admin mới có quyền chỉnh sửa khóa học"
             )
         
-        updated_course = await admin_service.update_course(course_id, course_data.dict(exclude_unset=True))
+        updated_course = await admin_service.update_course_admin(course_id, course_data.dict(exclude_unset=True))
         return AdminCourseUpdateResponse(**updated_course)
         
     except HTTPException:
@@ -563,7 +569,7 @@ async def handle_delete_course_admin(
                 detail="Chỉ admin mới có quyền xóa khóa học"
             )
         
-        delete_result = await admin_service.delete_course(course_id)
+        delete_result = await admin_service.delete_course_admin(course_id)
         return AdminDeleteCourseResponse(**delete_result)
         
     except HTTPException:
@@ -580,11 +586,13 @@ async def handle_delete_course_admin(
 # ============================================================================
 
 async def handle_list_classes_admin(
-    instructor_id: Optional[str] = None,
-    course_id: Optional[str] = None,
-    status: Optional[str] = None,
-    skip: int = 0,
+    page: int = 1,
     limit: int = 20,
+    search: Optional[str] = None,
+    instructor_filter: Optional[str] = None,
+    status_filter: Optional[str] = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
     current_user: Dict = None
 ) -> AdminClassListResponse:
     """
@@ -617,12 +625,14 @@ async def handle_list_classes_admin(
                 detail="Chỉ admin mới có quyền xem tất cả lớp học"
             )
         
-        classes_data = await admin_service.get_classes_list(
-            instructor_id=instructor_id,
-            course_id=course_id,
-            status=status,
-            skip=skip,
-            limit=limit
+        classes_data = await admin_service.get_classes_list_admin(
+            page=page,
+            limit=limit,
+            search=search,
+            instructor_filter=instructor_filter,
+            status_filter=status_filter,
+            sort_by=sort_by,
+            sort_order=sort_order
         )
         
         return AdminClassListResponse(**classes_data)
@@ -667,7 +677,7 @@ async def handle_get_class_detail_admin(
                 detail="Chỉ admin mới có quyền xem chi tiết lớp học"
             )
         
-        class_detail = await admin_service.get_class_detail(class_id)
+        class_detail = await admin_service.get_class_detail_admin(class_id)
         return AdminClassDetailResponse(**class_detail)
         
     except HTTPException:

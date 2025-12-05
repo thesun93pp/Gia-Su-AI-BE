@@ -16,7 +16,7 @@ class AdminUserListItem(BaseModel):
     role: str = Field(..., description="student|instructor|admin")
     status: str = Field(..., description="active|inactive")
     created_at: datetime
-    last_login: Optional[datetime] = None
+    last_login_at: Optional[datetime] = None
     enrollment_count: Optional[int] = Field(None, description="For student")
     class_count: Optional[int] = Field(None, description="For instructor")
 
@@ -64,7 +64,7 @@ class AdminUserDetailResponse(BaseModel):
     status: str = Field(..., description="active|inactive")
     created_at: datetime
     updated_at: datetime
-    last_login: Optional[datetime] = None
+    last_login_at: Optional[datetime] = None
     statistics: UserStatistics
     current_enrollments: Optional[List[CurrentEnrollment]] = None
     teaching_classes: Optional[List[TeachingClass]] = None

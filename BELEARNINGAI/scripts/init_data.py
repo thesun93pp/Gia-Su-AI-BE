@@ -197,7 +197,7 @@ Phù hợp cho: Người mới bắt đầu lập trình, sinh viên IT, develop
         category="Programming",
         level="Beginner",
         thumbnail_url="https://images.unsplash.com/photo-1526379095098-d400fd0bf935?w=800&h=450",
-        preview_video_url="https://www.youtube.com/watch?v=sample_python_preview",
+        preview_video_url="https://www.youtube.com/watch?v=rfscVS0vtbw",  # Python tutorial video thực tế
         language="vi",
         status="published",
         owner_id=admin_id,
@@ -551,12 +551,25 @@ for row in matrix:
             lesson_id = str(uuid.uuid4())  # Cùng ID cho cả embedded và separate
             quiz_id = str(uuid.uuid4()) if lesson_info.get("has_quiz", False) else None
             
-            # Tạo rich content structure
+            # Danh sách video Python thực tế từ YouTube (miễn phí, public)
+            demo_videos = [
+                "https://www.youtube.com/watch?v=rfscVS0vtbw",  # Learn Python - Full Course for Beginners
+                "https://www.youtube.com/watch?v=_uQrJ0TkZlc",  # Python Tutorial
+                "https://www.youtube.com/watch?v=kqtD5dpn9C8",  # Python for Beginners
+                "https://www.youtube.com/watch?v=8ext9G7xspg",  # Python Full Course
+                "https://www.youtube.com/watch?v=t8pPdKYpowI",  # Python Crash Course
+            ]
+            
+            # Chọn video dựa trên lesson_order
+            video_url = demo_videos[(lesson_order + module_order) % len(demo_videos)]
+            video_id = video_url.split("watch?v=")[1] if "watch?v=" in video_url else "rfscVS0vtbw"
+            
+            # Tạo rich content structure với video thực tế
             lesson_content = {
                 "html_content": lesson_info.get("detailed_content", f"<p>Nội dung chi tiết cho {lesson_info['title']}</p>"),
-                "video_url": f"https://youtu.be/python_lesson_{lesson_order}_{module_order}",
+                "video_url": video_url,  # Video YouTube thực tế
                 "video_duration": lesson_info["duration_minutes"] * 60,
-                "video_thumbnail": f"https://img.youtube.com/vi/python_lesson_{lesson_order}_{module_order}/maxresdefault.jpg",
+                "video_thumbnail": f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg",  # Thumbnail thực tế
                 "code_snippets": [
                     {
                         "language": "python",
@@ -566,7 +579,7 @@ for row in matrix:
                 ]
             }
             
-            # Tạo resources chi tiết
+            # Tạo resources chi tiết (bao gồm audio)
             lesson_resources = [
                 {
                     "id": str(uuid.uuid4()),
@@ -584,6 +597,17 @@ for row in matrix:
                     "description": "File Python với code examples và exercises",
                     "url": f"https://github.com/python-course/module_{module_order}/lesson_{lesson_order}.py",
                     "file_size_bytes": random.randint(5000, 50000),
+                    "is_downloadable": True
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "type": "audio",
+                    "title": f"Audio Lecture - {lesson_info['title']}",
+                    "description": "Bản ghi âm bài giảng dạng MP3",
+                    "url": f"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-{(lesson_order % 16) + 1}.mp3",  # Demo audio công khai
+                    "file_size_bytes": random.randint(5000000, 15000000),  # 5-15MB
+                    "audio_format": "mp3",
+                    "duration_seconds": lesson_info["duration_minutes"] * 60,
                     "is_downloadable": True
                 },
                 {
@@ -606,7 +630,8 @@ for row in matrix:
                 content=json.dumps(lesson_content),  # Store as JSON string
                 content_type=lesson_info["content_type"],
                 duration_minutes=lesson_info["duration_minutes"],
-                video_url=lesson_content["video_url"],
+                video_url=lesson_content["video_url"],  # YouTube video thực tế
+                audio_url=f"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-{(lesson_order % 16) + 1}.mp3" if lesson_order % 2 == 0 else None,  # Demo audio công khai
                 resources=lesson_resources,
                 quiz_id=quiz_id,
                 is_published=True
@@ -623,7 +648,8 @@ for row in matrix:
                 content=json.dumps(lesson_content),  # Full content
                 content_type=lesson_info["content_type"],
                 duration_minutes=lesson_info["duration_minutes"],
-                video_url=lesson_content["video_url"],
+                video_url=lesson_content["video_url"],  # YouTube video thực tế
+                audio_url=f"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-{(lesson_order % 16) + 1}.mp3" if lesson_order % 2 == 0 else None,  # Demo audio công khai
                 resources=lesson_resources,
                 quiz_id=quiz_id,
                 is_published=True,
@@ -1134,6 +1160,159 @@ async def seed_recommendations(user_ids: Dict[str, List[str]]):
     print(f"✅ Đã tạo thành công {len(recommendations_to_create)} đề xuất học tập.")
 
 
+async def seed_personal_courses(user_ids: Dict[str, List[str]]) -> List[str]:
+    """
+    Tạo Personal Courses (Khóa học cá nhân) do STUDENT tự tạo.
+    Section 2.5 - CHUCNANG.md
+    - 3-5 khóa học cá nhân từ các student khác nhau
+    - Mỗi khóa có modules và lessons tự định nghĩa
+    """
+    print("\n--- Bắt đầu tạo Personal Courses (Student tự tạo) ---")
+    
+    personal_courses_to_create = []
+    personal_course_ids = []
+    student_ids = user_ids.get("student", [])
+    
+    if not student_ids:
+        print("⚠️ Không có student để tạo personal courses.")
+        return []
+    
+    # Lấy 3-5 students ngẫu nhiên để tạo khóa học cá nhân
+    selected_students = random.sample(student_ids, k=min(len(student_ids), random.randint(3, 5)))
+    
+    personal_course_templates = [
+        {
+            "title": "Lộ trình học Machine Learning của tôi",
+            "description": "Khóa học cá nhân tổng hợp kiến thức ML từ cơ bản đến nâng cao mà tôi đã học và nghiên cứu",
+            "category": "Data Science",
+            "level": "Intermediate"
+        },
+        {
+            "title": "Tự học Web Development Full-stack",
+            "description": "Khóa học cá nhân về phát triển web từ HTML/CSS đến React và Node.js",
+            "category": "Programming",
+            "level": "Beginner"
+        },
+        {
+            "title": "Chinh phục Tiếng Anh IELTS",
+            "description": "Lộ trình cá nhân ôn luyện IELTS 7.0+ với tài liệu và bài tập tự tổng hợp",
+            "category": "Languages",
+            "level": "Intermediate"
+        },
+        {
+            "title": "Toán học cho Data Science",
+            "description": "Tổng hợp kiến thức toán cần thiết cho Data Science: Linear Algebra, Calculus, Statistics",
+            "category": "Math",
+            "level": "Advanced"
+        },
+        {
+            "title": "Khởi nghiệp và Quản lý Startup",
+            "description": "Khóa học tự tổng hợp về khởi nghiệp, từ ý tưởng đến MVP và fundraising",
+            "category": "Business",
+            "level": "Beginner"
+        }
+    ]
+    
+    for idx, student_id in enumerate(selected_students):
+        template = personal_course_templates[idx % len(personal_course_templates)]
+        
+        # Lấy thông tin student
+        student = await User.get(student_id)
+        
+        course_id = str(uuid.uuid4())
+        
+        # Tạo modules cho personal course
+        personal_modules = []
+        for mod_idx in range(random.randint(2, 4)):
+            module_id = str(uuid.uuid4())
+            
+            # Tạo lessons cho module
+            module_lessons = []
+            for lesson_idx in range(random.randint(2, 5)):
+                lesson_id = str(uuid.uuid4())
+                
+                embedded_lesson = EmbeddedLesson(
+                    id=lesson_id,
+                    title=f"Bài {lesson_idx + 1}: {fake.catch_phrase()}",
+                    description=f"Nội dung bài học số {lesson_idx + 1} trong module {mod_idx + 1}",
+                    order=lesson_idx + 1,
+                    content_type=random.choice(["text", "video", "mixed"]),
+                    duration_minutes=random.randint(15, 45),
+                    is_published=random.choice([True, False]),
+                    video_url=f"https://youtu.be/personal_{course_id}_{lesson_id}" if random.choice([True, False]) else None,
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow()
+                )
+                module_lessons.append(embedded_lesson)
+            
+            embedded_module = EmbeddedModule(
+                id=module_id,
+                title=f"Module {mod_idx + 1}: {fake.bs().title()}",
+                description=f"Mô tả chi tiết cho module {mod_idx + 1}",
+                order=mod_idx + 1,
+                difficulty=random.choice(["Basic", "Intermediate", "Advanced"]),
+                lessons=module_lessons,
+                is_published=random.choice([True, False]),
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            personal_modules.append(embedded_module)
+        
+        # Tính toán tổng duration
+        total_duration = sum(
+            lesson.duration_minutes 
+            for module in personal_modules 
+            for lesson in module.lessons
+        )
+        
+        total_lessons = sum(len(module.lessons) for module in personal_modules)
+        
+        personal_course = Course(
+            id=course_id,
+            title=template["title"],
+            description=template["description"],
+            category=template["category"],
+            level=template["level"],
+            thumbnail_url=f"https://images.unsplash.com/photo-{random.randint(1500000000000, 1600000000000)}?w=800&h=450",
+            language="vi",
+            status=random.choice(["draft", "published"]),
+            owner_id=student_id,
+            owner_type="student",  # ✅ Student là owner
+            instructor_id=None,  # Personal course không có instructor
+            instructor_name=None,
+            instructor_avatar=None,
+            learning_outcomes=[
+                {
+                    "id": str(uuid.uuid4()),
+                    "description": f"Đạt được kỹ năng về {template['category']}",
+                    "skill_tag": f"{template['category'].lower()}-personal"
+                }
+            ],
+            prerequisites=[
+                "Tự học, tự nghiên cứu",
+                "Đam mê và kiên trì"
+            ],
+            modules=personal_modules,
+            total_duration_minutes=total_duration,
+            total_modules=len(personal_modules),
+            total_lessons=total_lessons,
+            enrollment_count=0,
+            avg_rating=0.0,
+            created_at=datetime.utcnow() - timedelta(days=random.randint(1, 30)),
+            updated_at=datetime.utcnow()
+        )
+        
+        personal_courses_to_create.append(personal_course)
+        personal_course_ids.append(course_id)
+        print(f"    📚 Đã chuẩn bị Personal Course: {personal_course.title} (bởi {student.full_name})")
+    
+    if personal_courses_to_create:
+        await Course.insert_many(personal_courses_to_create)
+    
+    print(f"✅ Đã tạo thành công {len(personal_courses_to_create)} khóa học cá nhân (Personal Courses).")
+    return personal_course_ids
+
+
 async def main():
     """Hàm chính để chạy script."""
     await init_db()
@@ -1147,8 +1326,19 @@ async def main():
     await seed_conversations(user_ids, course_ids)
     await seed_classes(user_ids, course_ids)
     await seed_recommendations(user_ids)
-    # Các hàm seed khác sẽ được gọi ở đây
+    await seed_personal_courses(user_ids) 
     print("\n🎉 Hoàn tất quá trình khởi tạo dữ liệu mẫu!")
+    print("\n📊 THỐNG KÊ DỮ LIỆU:")
+    print(f"  👥 Users: {await User.count()}")
+    print(f"  📚 Courses (Admin): {await Course.find({'owner_type': 'admin'}).count()}")
+    print(f"  📖 Personal Courses (Student): {await Course.find({'owner_type': 'student'}).count()}")
+    print(f"  📝 Enrollments: {await Enrollment.count()}")
+    print(f"  🎯 Assessment Sessions: {await AssessmentSession.count()}")
+    print(f"  💬 Conversations: {await Conversation.count()}")
+    print(f"  🏫 Classes: {await Class.count()}")
+    print(f"  🎓 Progress Records: {await Progress.count()}")
+    print(f"  📊 Quiz Attempts: {await QuizAttempt.count()}")
+    print(f"  💡 Recommendations: {await Recommendation.count()}")
 
 if __name__ == "__main__":
     asyncio.run(main())

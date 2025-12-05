@@ -111,31 +111,22 @@ async def get_users_list_admin(
             "role": user.role,
             "status": user.status,
             "created_at": user.created_at.isoformat(),
-            "last_login": user.last_login.isoformat() if user.last_login else None,
+            "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
             "enrollment_count": enrollment_count if user.role == "student" else None,
             "course_count": course_count if user.role == "instructor" else None
         })
     
-    # Calculate pagination
+    # Calculate pagination - theo API_SCHEMA.md Section 9.1
+    # Convert page-based to skip-based for response
+    skip = (page - 1) * limit
     total_pages = (total_count + limit - 1) // limit
     
     return {
-        "users": users_data,
-        "pagination": {
-            "current_page": page,
-            "total_pages": total_pages,
-            "total_items": total_count,
-            "items_per_page": limit,
-            "has_next": page < total_pages,
-            "has_prev": page > 1
-        },
-        "filters": {
-            "search": search,
-            "role_filter": role_filter,
-            "status_filter": status_filter,
-            "sort_by": sort_by,
-            "sort_order": sort_order
-        }
+        "data": users_data,
+        "total": total_count,
+        "skip": skip,
+        "limit": limit,
+        "has_next": page < total_pages
     }
 
 
@@ -246,7 +237,7 @@ async def get_user_detail_admin(user_id: str) -> Dict:
         "role": user.role,
         "status": user.status,
         "created_at": user.created_at.isoformat(),
-        "last_login": user.last_login.isoformat() if user.last_login else None,
+        "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
         "profile": {
             "phone": user.phone,
             "bio": user.bio,
@@ -953,3 +944,260 @@ async def get_class_detail_admin(class_id: str) -> Dict:
             "capacity_utilization": round(len(students_detail) / class_obj.max_students * 100, 2) if class_obj.max_students > 0 else 0
         }
     }
+
+
+# ============================================================================
+# MISSING FUNCTIONS - IMPLEMENTATION THEO TÀI LIỆU
+# ============================================================================
+
+async def change_user_role_admin(user_id: str, new_role: str) -> Dict:
+    """
+    Thay đổi vai trò người dùng (Section 4.1.6)
+    
+    Args:
+        user_id: ID của user cần thay đổi role
+        new_role: Vai trò mới (student|instructor|admin)
+        
+    Returns:
+        Dict chứa thông tin role change
+        
+    Raises:
+        404: User không tồn tại
+        400: Invalid role hoặc không thể thay đổi
+    """
+    # Get user
+    user = await User.get(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User không tồn tại"
+        )
+    
+    # Validate new role
+    valid_roles = ["student", "instructor", "admin"]
+    if new_role not in valid_roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Role phải là một trong: {', '.join(valid_roles)}"
+        )
+    
+    # Check if role is actually changing
+    old_role = user.role
+    if old_role == new_role:
+        return {
+            "user_id": str(user.id),
+            "old_role": old_role,
+            "new_role": new_role,
+            "message": f"User đã có role {new_role}",
+            "updated_at": datetime.utcnow().isoformat()
+        }
+    
+    # Update user role
+    user.role = new_role
+    user.updated_at = datetime.utcnow()
+    
+    try:
+        await user.save()
+        
+        return {
+            "user_id": str(user.id),
+            "old_role": old_role,
+            "new_role": new_role,
+            "message": f"Vai trò đã được thay đổi từ {old_role} thành {new_role}",
+            "updated_at": user.updated_at.isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi khi thay đổi role: {str(e)}"
+        )
+
+
+async def reset_user_password_admin(user_id: str, new_password: str) -> Dict:
+    """
+    Reset mật khẩu người dùng (Section 4.1.7)
+    
+    Args:
+        user_id: ID của user cần reset password
+        new_password: Mật khẩu mới
+        
+    Returns:
+        Dict confirmation
+        
+    Raises:
+        404: User không tồn tại
+        400: Password không hợp lệ
+    """
+    # Get user
+    user = await User.get(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User không tồn tại"
+        )
+    
+    # Validate password strength (basic validation)
+    if len(new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mật khẩu phải có ít nhất 8 ký tự"
+        )
+    
+    # Hash new password
+    user.password = hash_password(new_password)
+    user.updated_at = datetime.utcnow()
+    
+    try:
+        await user.save()
+        
+        return {
+            "user_id": str(user.id),
+            "message": "Mật khẩu đã được reset thành công",
+            "updated_at": user.updated_at.isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi khi reset password: {str(e)}"
+        )
+
+
+async def create_course_admin(course_data: Dict) -> Dict:
+    """
+    Tạo khóa học chính thức (Section 4.2.3)
+    
+    Args:
+        course_data: Dict chứa thông tin khóa học
+        
+    Returns:
+        Dict chứa thông tin khóa học mới
+    """
+    # Create course
+    course = Course(
+        title=course_data["title"],
+        description=course_data["description"],
+        instructor_id=course_data.get("creator_id", course_data.get("instructor_id")),
+        category=course_data["category"],
+        level=course_data["level"],
+        status=course_data.get("status", "draft"),
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow()
+    )
+    
+    try:
+        await course.save()
+        
+        # Get instructor info
+        instructor = await User.get(course.instructor_id)
+        instructor_name = instructor.full_name if instructor else "Unknown"
+        
+        return {
+            "course_id": str(course.id),
+            "title": course.title,
+            "creator_name": instructor_name,
+            "status": course.status,
+            "created_at": course.created_at.isoformat(),
+            "message": "Khóa học đã được tạo thành công"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi khi tạo khóa học: {str(e)}"
+        )
+
+
+async def update_course_admin(course_id: str, update_data: Dict) -> Dict:
+    """
+    Cập nhật khóa học (Section 4.2.4)
+    
+    Args:
+        course_id: ID khóa học
+        update_data: Dữ liệu cần cập nhật
+        
+    Returns:
+        Dict confirmation
+    """
+    # Get course
+    course = await Course.get(course_id)
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Khóa học không tồn tại"
+        )
+    
+    # Update allowed fields
+    allowed_fields = ["title", "description", "category", "level", "status"]
+    
+    for field, value in update_data.items():
+        if field in allowed_fields:
+            setattr(course, field, value)
+    
+    course.updated_at = datetime.utcnow()
+    
+    try:
+        await course.save()
+        
+        return {
+            "course_id": str(course.id),
+            "message": "Khóa học đã được cập nhật",
+            "updated_at": course.updated_at.isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi khi cập nhật khóa học: {str(e)}"
+        )
+
+
+async def delete_course_admin(course_id: str) -> Dict:
+    """
+    Xóa khóa học (Section 4.2.5)
+    
+    Args:
+        course_id: ID khóa học cần xóa
+        
+    Returns:
+        Dict confirmation
+    """
+    # Get course
+    course = await Course.get(course_id)
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Khóa học không tồn tại"
+        )
+    
+    # Check for active enrollments
+    active_enrollments = await Enrollment.find(
+        Enrollment.course_id == course_id,
+        Enrollment.status.in_(["active", "completed"])
+    ).count()
+    
+    if active_enrollments > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Không thể xóa khóa học có {active_enrollments} học viên đang học"
+        )
+    
+    # Check for classes using this course
+    classes_using_course = await Class.find(
+        Class.course_id == course_id
+    ).count()
+    
+    if classes_using_course > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Không thể xóa khóa học được sử dụng bởi {classes_using_course} lớp học"
+        )
+    
+    try:
+        await course.delete()
+        
+        return {
+            "message": "Khóa học đã được xóa vĩnh viễn"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi khi xóa khóa học: {str(e)}"
+        )

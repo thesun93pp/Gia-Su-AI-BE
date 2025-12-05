@@ -8,21 +8,21 @@ Section 4.2: Course Management (5 endpoints)
 from fastapi import APIRouter, Depends, status, Query
 from typing import Optional
 from middleware.auth import get_current_user
-from controllers.user_controller import (
+from controllers.admin_controller import (
     handle_list_users_admin,
     handle_get_user_detail_admin,
     handle_create_user_admin,
     handle_update_user_admin,
     handle_delete_user_admin,
     handle_change_user_role_admin,
-    handle_reset_user_password_admin
-)
-from controllers.course_controller import (
+    handle_reset_user_password_admin,
     handle_list_courses_admin,
     handle_get_course_detail_admin,
     handle_create_course_admin,
     handle_update_course_admin,
-    handle_delete_course_admin
+    handle_delete_course_admin,
+    handle_list_classes_admin,
+    handle_get_class_detail_admin
 )
 from schemas.admin import (
     AdminUserListResponse,
@@ -64,8 +64,8 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 )
 async def list_users_admin(
     role: Optional[str] = Query(None, description="Filter role: student|instructor|admin"),
-    status_param: Optional[str] = Query(None, alias="status", description="Filter status: active|inactive"),
-    search: Optional[str] = Query(None, description="Search tên hoặc email"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter status: active|inactive"),
+    keyword: Optional[str] = Query(None, description="Search tên hoặc email"),
     sort_by: str = Query("created_at", description="Field sort"),
     sort_order: str = Query("desc", description="asc|desc"),
     skip: int = Query(0, ge=0),
@@ -76,8 +76,8 @@ async def list_users_admin(
     return await handle_list_users_admin(
         current_user=current_user,
         role=role,
-        status=status_param,
-        search=search,
+        status_filter=status_filter,
+        keyword=keyword,
         sort_by=sort_by,
         sort_order=sort_order,
         skip=skip,
@@ -194,7 +194,7 @@ async def list_courses_admin(
     status_param: Optional[str] = Query(None, alias="status", description="draft|published|archived"),
     category: Optional[str] = Query(None, description="Filter category"),
     course_type: Optional[str] = Query(None, description="public|personal"),
-    search: Optional[str] = Query(None, description="Search tên course"),
+    keyword: Optional[str] = Query(None, description="Search tên course"),
     sort_by: str = Query("created_at", description="Field sort"),
     sort_order: str = Query("desc", description="asc|desc"),
     skip: int = Query(0, ge=0),
@@ -208,7 +208,7 @@ async def list_courses_admin(
         status=status_param,
         category=category,
         course_type=course_type,
-        search=search,
+        keyword=keyword,
         sort_by=sort_by,
         sort_order=sort_order,
         skip=skip,
@@ -299,7 +299,6 @@ async def list_classes_admin(
     current_user: dict = Depends(get_current_user)
 ):
     """Section 4.3.1 - Danh sách lớp học (Admin)"""
-    from controllers.admin_controller import handle_list_classes_admin
     return await handle_list_classes_admin(
         page, limit, search, instructor_filter, status_filter, 
         sort_by, sort_order, current_user
@@ -318,6 +317,5 @@ async def get_class_detail_admin(
     current_user: dict = Depends(get_current_user)
 ):
     """Section 4.3.2 - Chi tiết lớp học (Admin)"""
-    from controllers.admin_controller import handle_get_class_detail_admin
     return await handle_get_class_detail_admin(class_id, current_user)
 

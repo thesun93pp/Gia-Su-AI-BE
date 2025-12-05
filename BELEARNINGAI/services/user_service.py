@@ -520,7 +520,7 @@ async def get_user_detail_admin(user_id: str) -> dict:
             "status": user.status,
             "created_at": user.created_at,
             "updated_at": user.updated_at,
-            "last_login": None,
+            "last_login_at": user.last_login_at if user.last_login_at else None,
             "statistics": statistics,
             "current_enrollments": current_enrollments
         }
@@ -578,7 +578,7 @@ async def get_user_detail_admin(user_id: str) -> dict:
             "status": user.status,
             "created_at": user.created_at,
             "updated_at": user.updated_at,
-            "last_login": None,
+            "last_login_at": user.last_login_at if user.last_login_at else None,
             "statistics": statistics,
             "teaching_classes": teaching_classes
         }
@@ -595,7 +595,7 @@ async def get_user_detail_admin(user_id: str) -> dict:
             "status": user.status,
             "created_at": user.created_at,
             "updated_at": user.updated_at,
-            "last_login": None,
+            "last_login_at": user.last_login_at if user.last_login_at else None,
             "statistics": {}
         }
 

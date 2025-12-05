@@ -61,8 +61,7 @@ CHROMA_PERSIST_DIRECTORY=./chroma_db
 # Create initial data
 python scripts/init_data.py  -- python -m scripts.init_data
 
-# Create database indexes
-python scripts/create_indexes.py
+
 ```
 
 ---

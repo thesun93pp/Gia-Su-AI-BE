@@ -269,7 +269,7 @@ async def _search_users(search_regex: re.Pattern, current_user: Dict) -> Dict:
         metadata = {
             "role": user.role,
             "email": user.email,
-            "last_login": user.last_login.isoformat() if user.last_login else None
+            "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None
         }
         
         user_items.append({

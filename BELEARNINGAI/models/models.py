@@ -27,9 +27,10 @@ class EmbeddedLesson(BaseModel):
     description: Optional[str] = None
     order: int
     content: str = ""
-    content_type: str = "text"
+    content_type: str = "text"  # text|video|audio|code|mixed
     duration_minutes: int = 0
     video_url: Optional[str] = None
+    audio_url: Optional[str] = None  # URL audio file (mp3, wav, ogg)
     resources: List[dict] = Field(default_factory=list)
     quiz_id: Optional[str] = None
     is_published: bool = True
@@ -46,6 +47,8 @@ class EmbeddedModule(BaseModel):
     difficulty: str = "Basic"
     estimated_hours: float = 0
     learning_outcomes: List[dict] = Field(default_factory=list)
+    prerequisites: List[str] = Field(default_factory=list, description="Module IDs tiên quyết")
+    resources: List[dict] = Field(default_factory=list, description="Tài liệu module-level")
     lessons: List[EmbeddedLesson] = Field(default_factory=list)
     total_lessons: int = 0
     total_duration_minutes: int = 0
@@ -146,18 +149,21 @@ class Lesson(Document):
     
     # Nội dung - theo LessonSummary schema
     content: str = Field(default="", description="Nội dung HTML hoặc markdown")
-    content_type: str = Field(default="text", description="Loại nội dung: text|video|quiz|mixed")
+    content_type: str = Field(default="text", description="Loại nội dung: text|video|audio|code|mixed")
     duration_minutes: int = Field(default=0, description="Thời lượng lesson (phút)")
     video_url: Optional[str] = Field(None, description="URL video bài học")
+    audio_url: Optional[str] = Field(None, description="URL audio bài giảng (mp3, wav, ogg)")
     
     # Resources theo schema structure
     resources: List[dict] = Field(default_factory=list, description="Tài liệu kèm theo")
     # Resource structure: {
     #   "id": "uuid",
     #   "title": "Resource name",
-    #   "type": "pdf|slide|code|video|link", 
+    #   "type": "pdf|slide|code|video|audio|link", 
     #   "url": "download/view link",
     #   "size_mb": float,
+    #   "audio_format": "mp3|wav|ogg" (optional, for audio type),
+    #   "duration_seconds": int (optional, for video/audio),
     #   "description": "optional"
     # }
     

@@ -68,7 +68,7 @@ class OwnerInfo(BaseModel):
 class LearningOutcome(BaseModel):
     """Mục tiêu học tập của khóa học"""
     description: str = Field(..., description="Mục tiêu cụ thể, đo lường được")
-    skill_tag: str = Field(..., description="Kỹ năng liên quan")
+    skill_tag: Optional[str] = Field(None, description="Kỹ năng liên quan")
 
 
 class LessonSummary(BaseModel):
