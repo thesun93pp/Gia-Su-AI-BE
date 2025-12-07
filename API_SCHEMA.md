@@ -546,6 +546,7 @@ limit: number (số khóa học mỗi trang, mặc định: 10, tối đa: 100)
       "avg_rating": "number (điểm đánh giá trung bình 0-5, có thể null)",
       "instructor_name": "string (tên giảng viên)",
       "instructor_avatar": "string (avatar giảng viên, có thể null)",
+      "instructor_bio": "string (tiểu sử giảng viên, có thể null)",
       "is_enrolled": "boolean (user hiện tại đã đăng ký chưa)",
       "created_at": "datetime"
     }
@@ -708,6 +709,7 @@ course_id: string (bắt buộc, UUID của khóa học cần xem)
   "status": "string (active)",
   "enrolled_at": "datetime (thời gian đăng ký)",
   "progress_percent": "number (0, khởi tạo với 0%)",
+  "completion_rate": "number (0, khởi tạo với 0% - alias của progress_percent)",
   "message": "string (Đăng ký khóa học thành công. Chúc bạn học tập hiệu quả!)"
 }
 ```
@@ -755,6 +757,7 @@ sort_order: string (asc|desc, mặc định: desc)
       "course_thumbnail": "string (URL ảnh đại diện)",
       "course_level": "string (Beginner|Intermediate|Advanced)",
       "instructor_name": "string",
+      "instructor_bio": "string (tiểu sử giảng viên, có thể null)",
       "status": "string (in-progress|completed|cancelled)",
       "progress_percent": "number (0-100, tiến độ hoàn thành)",
       "enrolled_at": "datetime (ngày đăng ký)",
@@ -800,6 +803,7 @@ sort_order: string (asc|desc, mặc định: desc)
   "course_description": "string",
   "course_thumbnail": "string (URL)",
   "instructor_name": "string",
+  "instructor_bio": "string (tiểu sử giảng viên, có thể null)",
   "status": "string (active|completed|cancelled)",
   "enrolled_at": "datetime (thời gian đăng ký)",
   "completed_at": "datetime (có thể null)",
@@ -877,9 +881,13 @@ sort_order: string (asc|desc, mặc định: desc)
   "order": "number (thứ tự module trong khóa học)",
   "estimated_hours": "number (thời lượng học tập ước tính)",
   "learning_outcomes": [
-    "string (UUID của các modules tiên quyết cần hoàn thành trước)"
+    {
+      "id": "string (UUID)",
+      "outcome": "string (mô tả mục tiêu học tập cụ thể)",
+      "skill_tag": "string (tag kỹ năng, vd: 'python-functions')",
+      "is_mandatory": "boolean (kiến thức bắt buộc hay tùy chọn)"
+    }
   ],
-  "pass_threshold": "number (điểm pass tối thiểu %, thường là 70)",
   "lessons": [
     {
       "id": "string (UUID lesson)",
@@ -901,12 +909,14 @@ sort_order: string (asc|desc, mặc định: desc)
       "is_mandatory": "boolean"
     }
   ],
-  "progress_info": {
-    "total_lessons": "number (tổng số bài học)",
-    "completed_lessons": "number (số bài đã hoàn thành)",
-    "progress_percent": "number (0-100, tiến độ hoàn thành module)",
-    "is_accessible": "boolean (có thể truy cập hay cần hoàn thành module trước)"
-  },
+  "completion_status": "string (not-started|in-progress|completed)",
+  "completed_lessons": "number (số bài đã hoàn thành)",
+  "total_lessons": "number (tổng số bài học)",
+  "progress_percent": "number (0-100, tiến độ hoàn thành module)",
+  "is_accessible": "boolean (có thể truy cập hay cần hoàn thành module trước)",
+  "prerequisites": [
+    "string (UUID các module tiên quyết)"
+  ],
   "created_at": "datetime",
   "updated_at": "datetime"
 }
@@ -936,6 +946,8 @@ sort_order: string (asc|desc, mặc định: desc)
 
 **Mô tả:** Truy cập và học nội dung của một lesson cụ thể. Các loại nội dung: (1) Nội dung text/HTML (bài giảng, giải thích lý thuyết), (2) Video bài giảng với player hỗ trợ tua, tốc độ phát, (3) Tài liệu đính kèm (PDF, Word, code files). Tracking tự động: Hệ thống ghi nhận thời gian học, phần nào đã xem. Tự động đánh dấu phần đã hoàn thành khi học viên xem hết.
 
+**FIXED (Dec 07, 2025):** Response structure đã được cập nhật với navigation nested objects và quiz_info structure đầy đủ hơn.
+
 **Path Parameters:**
 ```
 course_id: string (bắt buộc, UUID của khóa học)
@@ -958,6 +970,15 @@ lesson_id: string (bắt buộc, UUID của lesson)
     "video_url": "string (URL video bài giảng, có thể null)",
     "video_duration": "number (thời lượng video tính bằng giây, có thể null)",
     "video_thumbnail": "string (URL ảnh thumbnail video, có thể null)",
+    "attachments": [
+      {
+        "id": "string (UUID tài liệu đính kèm)",
+        "name": "string (tên file)",
+        "type": "string (pdf|word|pptx|code|external_link)",
+        "url": "string (link download hoặc xem)",
+        "size": "number (kích thước file bytes, null cho external link)"
+      }
+    ],
     "code_snippets": [
       {
         "language": "string (python|javascript|java|...)",
@@ -966,6 +987,9 @@ lesson_id: string (bắt buộc, UUID của lesson)
       }
     ]
   },
+  "learning_objectives": [
+    "string (mục tiêu cụ thể của bài học này)"
+  ],
   "resources": [
     {
       "id": "string (UUID)",
@@ -977,13 +1001,10 @@ lesson_id: string (bắt buộc, UUID của lesson)
       "is_downloadable": "boolean"
     }
   ],
-  "learning_objectives": [
-    "string (mục tiêu cụ thể của bài học này)"
-  ],
   "has_quiz": "boolean (bài học có quiz kèm theo không)",
   "quiz_info": {
     "quiz_id": "string (UUID quiz, null nếu has_quiz=false)",
-    "question_count": "number (số câu hỏi, null nếu has_quiz=false)",
+    "question_count": "number (số câu hỏi trong quiz, null nếu has_quiz=false)",
     "is_mandatory": "boolean (bắt buộc làm quiz để tiếp tục, null nếu has_quiz=false)"
   },
   "completion_status": {
@@ -995,16 +1016,16 @@ lesson_id: string (bắt buộc, UUID của lesson)
   "navigation": {
     "previous_lesson": {
       "id": "string (UUID, null nếu là lesson đầu tiên)",
-      "title": "string (null nếu là lesson đầu tiên)"
+      "title": "string (tiêu đề lesson trước, null nếu là lesson đầu tiên)"
     },
     "next_lesson": {
       "id": "string (UUID, null nếu là lesson cuối hoặc chưa unlock)",
-      "title": "string (null nếu là lesson cuối hoặc chưa unlock)",
+      "title": "string (tiêu đề lesson kế tiếp, null nếu là lesson cuối hoặc chưa unlock)",
       "is_locked": "boolean (có bị khóa không, cần hoàn thành lesson hiện tại)"
     }
   },
-  "created_at": "datetime",
-  "updated_at": "datetime"
+  "created_at": "datetime (thời gian tạo lesson)",
+  "updated_at": "datetime (thời gian cập nhật gần nhất)"
 }
 ```
 
@@ -2495,7 +2516,7 @@ conversation_id: string (bắt buộc, UUID)
 **Router:** `analytics_router.py`  
 **Controller:** `handle_get_learning_stats`
 
-**Mô tả:** Thống kê tổng quan hoạt động học tập của học viên.
+**Mô tả:** Thống kê tổng quan hoạt động học tập của học viên. Hệ thống chỉ đếm quiz attempts từ các courses đang active (không tính quiz từ courses bị cancelled) để đảm bảo thống kê chính xác.
 
 **Response Schema (200 OK):**
 ```json
@@ -2532,7 +2553,9 @@ conversation_id: string (bắt buộc, UUID)
 **Router:** `analytics_router.py`  
 **Controller:** `handle_get_progress_chart`
 
-**Mô tả:** Dữ liệu vẽ biểu đồ tiến độ học tập theo thời gian.
+**Mô tả:** Dữ liệu vẽ biểu đồ tiến độ học tập theo thời gian. Hệ thống parse `lessons_progress` array trong Progress document để đếm lessons completed theo `completion_date` (incremental data, không dùng cumulative count). Đảm bảo chart hiển thị chính xác số lessons hoàn thành trong từng time period.
+
+**FIXED (Dec 07, 2025):** Progress document sử dụng validated LessonProgressItem schema với các fields: lesson_id (UUID), lesson_title (string), status (enum: not-started|in-progress|completed), completion_date (datetime nullable), time_spent_minutes (number), video_progress_seconds (number nullable).
 
 **Query Parameters:**
 ```
@@ -2938,7 +2961,7 @@ limit: number (pagination)
 **Router:** `analytics_router.py`  
 **Controller:** `handle_get_instructor_class_stats`
 
-**Mô tả:** Tổng quan các lớp học và hiệu suất giảng dạy.
+**Mô tả:** Tổng quan các lớp học và hiệu suất giảng dạy. Hệ thống filter progress chỉ của students trong class cụ thể (dựa trên enrollment user_ids), đảm bảo avg_progress được tính chính xác cho từng lớp.
 
 **Response Schema (200 OK):**
 ```json
@@ -2971,7 +2994,7 @@ limit: number (pagination)
 **Router:** `analytics_router.py`  
 **Controller:** `handle_get_instructor_progress_chart`
 
-**Mô tả:** Biểu đồ tiến độ học tập của tất cả lớp học theo thời gian.
+**Mô tả:** Biểu đồ tiến độ học tập của tất cả lớp học theo thời gian. Hệ thống chỉ đếm progress của students trong classes (filter qua enrollments), parse `lessons_progress` theo `completion_date` (incremental, không cumulative) để hiển thị chính xác số lessons hoàn thành theo từng time period.
 
 **Query Parameters:**
 ```
@@ -3640,7 +3663,7 @@ group_by: string (day|week|month, mặc định: week)
 **Router:** `analytics_router.py`  
 **Controller:** `handle_get_admin_courses_analytics`
 
-**Mô tả:** Phân tích hiệu suất các khóa học trong hệ thống.
+**Mô tả:** Phân tích hiệu suất các khóa học trong hệ thống. Top courses được tính dựa trên số lượng enrollments trong time_range, sử dụng field `enrolled_at` (không phải `created_at`) để filter chính xác thời điểm học viên đăng ký khóa học.
 
 **Response Schema (200 OK):**
 ```json

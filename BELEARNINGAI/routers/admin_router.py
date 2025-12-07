@@ -3,6 +3,9 @@ Admin Router
 Định nghĩa routes cho admin management endpoints
 Section 4.1: User Management (7 endpoints)
 Section 4.2: Course Management (5 endpoints)
+Section 4.3: Class Management (2 endpoints)
+Section 4.4: Admin Analytics (3 endpoints)
+Tổng: 17 endpoints
 """
 
 from fastapi import APIRouter, Depends, status, Query
@@ -318,4 +321,54 @@ async def get_class_detail_admin(
 ):
     """Section 4.3.2 - Chi tiết lớp học (Admin)"""
     return await handle_get_class_detail_admin(class_id, current_user)
+
+
+# ============================================================================
+# ADMIN ANALYTICS (Section 4.4.2-4.4.4)
+# ============================================================================
+
+@router.get(
+    "/analytics/users-growth",
+    status_code=status.HTTP_200_OK,
+    summary="Thống kê tăng trưởng người dùng",
+    description="Phân tích tăng trưởng người dùng theo thời gian với breakdown theo role"
+)
+async def get_users_growth_analytics(
+    time_range: str = Query("30d", regex="^(7d|30d|90d)$", description="Khoảng thời gian"),
+    role_filter: Optional[str] = Query(None, description="Lọc theo role cụ thể"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Section 4.4.2 - Thống kê tăng trưởng người dùng (Admin)"""
+    from controllers.dashboard_controller import handle_get_users_growth_analytics
+    return await handle_get_users_growth_analytics(time_range, role_filter, current_user)
+
+
+@router.get(
+    "/analytics/courses",
+    status_code=status.HTTP_200_OK,
+    summary="Phân tích khóa học chuyên sâu",
+    description="Analytics khóa học: top courses, completion rates, creation trends"
+)
+async def get_course_analytics(
+    time_range: str = Query("30d", regex="^(7d|30d|90d)$", description="Khoảng thời gian"),
+    category_filter: Optional[str] = Query(None, description="Lọc theo danh mục"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Section 4.4.3 - Phân tích khóa học (Admin)"""
+    from controllers.dashboard_controller import handle_get_course_analytics
+    return await handle_get_course_analytics(time_range, category_filter, current_user)
+
+
+@router.get(
+    "/analytics/system-health",
+    status_code=status.HTTP_200_OK,
+    summary="Giám sát sức khỏe hệ thống",
+    description="Metrics hệ thống: database, performance, alerts, utilization"
+)
+async def get_system_health(
+    current_user: dict = Depends(get_current_user)
+):
+    """Section 4.4.4 - Giám sát sức khỏe hệ thống (Admin)"""
+    from controllers.dashboard_controller import handle_get_system_health
+    return await handle_get_system_health(current_user)
 

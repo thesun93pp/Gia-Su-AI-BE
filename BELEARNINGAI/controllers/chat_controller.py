@@ -6,7 +6,7 @@ Section 2.6.1-2.6.5
 
 from typing import Dict, Optional
 from fastapi import HTTPException, status
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from schemas.chat import (
     ChatMessageRequest,
@@ -98,7 +98,7 @@ async def handle_send_chat_message(
         "id": generate_uuid(),
         "role": "user",
         "content": request.question,
-        "created_at": datetime.utcnow()
+        "timestamp": datetime.utcnow()
     }
     conversation.messages.append(user_message)
     
@@ -114,7 +114,7 @@ async def handle_send_chat_message(
         "id": generate_uuid(),
         "role": "assistant",
         "content": ai_response_text,
-        "created_at": datetime.utcnow()
+        "timestamp": datetime.utcnow()
     }
     conversation.messages.append(ai_message)
     
@@ -123,11 +123,13 @@ async def handle_send_chat_message(
     
     return ChatMessageResponse(
         conversation_id=conversation.id,
-        course_id=course_id,
+        message_id=ai_message["id"],
         question=request.question,
         answer=ai_response_text,
-        generated_at=ai_message["created_at"],
-        sources=[]
+        timestamp=ai_message["timestamp"],
+        sources=[],
+        related_lessons=[]
+        # tokens_used is optional, will be added when AI service is integrated
     )
 
 
@@ -136,6 +138,7 @@ async def handle_send_chat_message(
 # ============================================================================
 
 async def handle_get_chat_history(
+    course_id: Optional[str],
     skip: int,
     limit: int,
     current_user: Dict
@@ -145,10 +148,12 @@ async def handle_get_chat_history(
     
     Hiển thị:
     - Tất cả conversations của user
-    - Nhóm theo course
+    - Lọc theo course_id (nếu có)
+    - Nhóm theo ngày
     - Sorted by last_message_at
     
     Args:
+        course_id: UUID khóa học để lọc (optional)
         skip: Pagination skip
         limit: Pagination limit
         current_user: User hiện tại
@@ -158,43 +163,79 @@ async def handle_get_chat_history(
         
     Endpoint: GET /api/v1/chat/history?skip=0&limit=20
     """
+    from datetime import timezone, timedelta
     user_id = current_user.get("user_id")
     
-    # Query conversations
-    conversations = await Conversation.find(
-        Conversation.user_id == user_id
-    ).sort("-updated_at").skip(skip).limit(limit).to_list()
+    # Build query với course_id filter nếu có
+    query_filters = [Conversation.user_id == user_id]
+    if course_id:
+        query_filters.append(Conversation.course_id == course_id)
     
-    # Build response
+    # Query conversations
+    conversations = await Conversation.find(*query_filters).sort("-updated_at").skip(skip).limit(limit).to_list()
+    
+    # Build response với schema mới
     conversations_data = []
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today_start - timedelta(days=1)
+    this_week_start = today_start - timedelta(days=now.weekday())
+    
+    grouped_by_date = {
+        "today": [],
+        "yesterday": [],
+        "this_week": [],
+        "older": []
+    }
+    
     for conv in conversations:
         # Lấy course info
         course = await course_service.get_course_by_id(conv.course_id)
         course_title = course.title if course else "Unknown Course"
         
-        # Tạo AI summary (simplified - lấy từ title hoặc first message)
-        summary = conv.title
+        # Tạo topic_summary (lấy từ title hoặc first message)
+        topic_summary = conv.title
         if len(conv.messages) > 0:
             first_msg = conv.messages[0]
             if first_msg.get("role") == "user":
-                summary = first_msg.get("content", "")[:100] + "..."
+                topic_summary = first_msg.get("content", "")[:100] + "..."
         
-        last_message_at = conv.updated_at
+        # Lấy last_message_preview
+        last_message_preview = ""
+        if len(conv.messages) > 0:
+            last_msg = conv.messages[-1]
+            last_message_preview = last_msg.get("content", "")[:100]
+            if len(last_msg.get("content", "")) > 100:
+                last_message_preview += "..."
+        
+        # Group by date
+        conv_updated = conv.updated_at.replace(tzinfo=timezone.utc) if conv.updated_at.tzinfo is None else conv.updated_at
+        if conv_updated >= today_start:
+            grouped_by_date["today"].append(str(conv.id))
+        elif conv_updated >= yesterday_start:
+            grouped_by_date["yesterday"].append(str(conv.id))
+        elif conv_updated >= this_week_start:
+            grouped_by_date["this_week"].append(str(conv.id))
+        else:
+            grouped_by_date["older"].append(str(conv.id))
         
         conversations_data.append({
-            "id": conv.id,
-            "course_id": conv.course_id,
+            "conversation_id": str(conv.id),
+            "course_id": str(conv.course_id),
             "course_title": course_title,
-            "summary": summary,
-            "last_message_at": last_message_at,
-            "message_count": len(conv.messages)
+            "topic_summary": topic_summary,
+            "message_count": len(conv.messages),
+            "last_message_preview": last_message_preview,
+            "created_at": conv.created_at,
+            "last_updated": conv.updated_at
         })
     
     # Count total
-    total = await Conversation.find(Conversation.user_id == user_id).count()
+    total = await Conversation.find(*query_filters).count()
     
     return ChatHistoryListResponse(
         conversations=conversations_data,
+        grouped_by_date=grouped_by_date,
         total=total,
         skip=skip,
         limit=limit
@@ -246,26 +287,29 @@ async def handle_get_conversation_detail(
     
     # Lấy course info
     course = await course_service.get_course_by_id(conversation.course_id)
-    course_title = course.title if course else "Unknown Course"
+    course_info = {
+        "course_id": str(conversation.course_id),
+        "title": course.title if course else "Unknown Course",
+        "thumbnail_url": course.thumbnail_url if course and hasattr(course, 'thumbnail_url') else None
+    }
     
-    # Build messages list
+    # Build messages list với schema mới
     messages = [
         {
-            "id": msg.get("id", ""),
+            "message_id": msg.get("id", ""),
             "role": msg.get("role"),
             "content": msg.get("content"),
-            "created_at": msg.get("created_at")
+            "timestamp": msg.get("timestamp")  # Theo API_SCHEMA.md Section 2.6.3
+            # sources is optional, will be added when RAG/retrieval is integrated
         }
         for msg in conversation.messages
     ]
     
     return ConversationDetailResponse(
-        id=conversation.id,
-        course_id=conversation.course_id,
-        course_title=course_title,
-        summary=conversation.title,
+        conversation_id=str(conversation.id),
+        course=course_info,
         messages=messages,
-        total_messages=len(messages),
+        message_count=len(messages),
         created_at=conversation.created_at,
         last_updated=conversation.updated_at
     )
@@ -305,8 +349,9 @@ async def handle_delete_all_conversations(
         await conv.delete()
     
     return ChatDeleteAllResponse(
+        deleted_count=deleted_count,
         message="Đã xóa tất cả lịch sử chat",
-        deleted_count=deleted_count
+        deleted_at=datetime.now(timezone.utc)
     )
 
 
@@ -354,5 +399,7 @@ async def handle_delete_conversation(
     await conversation.delete()
     
     return ChatDeleteResponse(
-        message="Conversation đã được xóa thành công"
+        conversation_id=str(conversation_id),
+        message="Conversation đã được xóa thành công",
+        deleted_at=datetime.now(timezone.utc)
     )

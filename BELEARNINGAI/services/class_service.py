@@ -75,9 +75,9 @@ async def create_class(
     return {
         "class_id": new_class.id,
         "name": new_class.name,
-        "course_id": new_class.course_id,
         "invite_code": new_class.invite_code,
-        "status": new_class.status,
+        "course_title": course.title,
+        "student_count": 0,
         "created_at": new_class.created_at,
         "message": "Tạo lớp học thành công"
     }
@@ -207,6 +207,9 @@ async def get_class_detail(class_id: str, instructor_id: str) -> Dict:
     # Get course
     course = await Course.get(cls.course_id)
     
+    # Count modules
+    module_count = len(course.modules) if course else 0
+    
     # Get students info
     students_info = []
     total_lessons_completed = 0
@@ -263,16 +266,20 @@ async def get_class_detail(class_id: str, instructor_id: str) -> Dict:
     return {
         "id": cls.id,
         "name": cls.name,
-        "course_id": cls.course_id,
-        "course_title": course.title if course else "Unknown",
-        "invite_code": cls.invite_code,
         "description": cls.description,
-        "status": cls.status,
+        "course": {
+            "id": cls.course_id,
+            "title": course.title if course else "Unknown",
+            "module_count": module_count
+        },
+        "invite_code": cls.invite_code,
+        "max_students": cls.max_students,
+        "student_count": len(cls.student_ids),
         "start_date": cls.start_date,
         "end_date": cls.end_date,
-        "max_students": cls.max_students,
-        "students": students_info,
-        "stats": stats
+        "status": cls.status,
+        "recent_students": students_info,
+        "class_stats": stats
     }
 
 
@@ -682,6 +689,7 @@ async def get_student_detail(
         "overall_progress": progress.overall_progress_percent if progress else 0.0,
         "completed_modules": sum(1 for m in modules_detail if m["progress"] == 100.0),
         "total_modules": len(modules_detail),
+        "study_streak_days": progress.study_streak_days if progress else 0,
         "total_study_time": progress.total_time_spent_minutes / 60.0 if progress else 0.0
     }
     

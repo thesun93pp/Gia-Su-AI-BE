@@ -93,7 +93,7 @@ async def get_quiz_results(
 @router.post(
     "/quizzes/{quiz_id}/retake",
     response_model=QuizRetakeResponse,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_201_CREATED,
     summary="Làm lại quiz",
     description="Tạo quiz mới với câu hỏi tương tự (AI-generated) cho quiz đã fail"
 )

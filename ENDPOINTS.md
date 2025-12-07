@@ -183,8 +183,8 @@
 ---
 
 ## Analytics Router (`analytics_router.py`)
-**Section:** 2.7.2-2.7.4, 3.4.2-3.4.4, 4.4.2-4.4.4  
-**Endpoints:** 8 API
+**Section:** 2.7.2-2.7.3, 3.4.2-3.4.4  
+**Endpoints:** 5 API (Admin analytics đã chuyển sang admin_router)
 
 | Endpoint | Method | Section | Controller | Schema |
 |----------|--------|---------|-----------|--------|
@@ -193,9 +193,6 @@
 | `/api/v1/analytics/instructor/classes` | GET | 3.4.2 | handle_get_instructor_class_stats | InstructorClassStatsResponse |
 | `/api/v1/analytics/instructor/progress-chart` | GET | 3.4.3 | handle_get_instructor_progress_chart | InstructorProgressChartResponse |
 | `/api/v1/analytics/instructor/quiz-performance` | GET | 3.4.4 | handle_get_instructor_quiz_performance | InstructorQuizPerformanceResponse |
-| `/api/v1/admin/analytics/users-growth` | GET | 4.4.2 | handle_get_admin_users_growth | AdminUsersGrowthResponse |
-| `/api/v1/admin/analytics/courses` | GET | 4.4.3 | handle_get_admin_courses_analytics | AdminCoursesAnalyticsResponse |
-| `/api/v1/admin/analytics/system-health` | GET | 4.4.4 | handle_get_admin_system_health | AdminSystemHealthResponse |
 
 ---
 
@@ -212,8 +209,8 @@
 ---
 
 ## Admin Router (`admin_router.py`)
-**Section:** 4.1-4.3  
-**Endpoints:** 14 API
+**Section:** 4.1-4.4  
+**Endpoints:** 17 API
 
 | Endpoint | Method | Section | Controller | Schema |
 |----------|--------|---------|-----------|--------|
@@ -231,6 +228,9 @@
 | `/api/v1/admin/courses/{course_id}` | DELETE | 4.2.5 | handle_delete_course_admin | AdminDeleteCourseResponse |
 | `/api/v1/admin/classes` | GET | 4.3.1 | handle_list_classes_admin | AdminClassListResponse |
 | `/api/v1/admin/classes/{class_id}` | GET | 4.3.2 | handle_get_class_detail_admin | AdminClassDetailResponse |
+| `/api/v1/admin/analytics/users-growth` | GET | 4.4.2 | handle_get_users_growth_analytics | AdminUsersGrowthResponse |
+| `/api/v1/admin/analytics/courses` | GET | 4.4.3 | handle_get_course_analytics | AdminCourseAnalyticsResponse |
+| `/api/v1/admin/analytics/system-health` | GET | 4.4.4 | handle_get_system_health | AdminSystemHealthResponse |
 
 **Note:** Admin dashboard endpoints đã được chuyển sang Dashboard Router.
 
@@ -255,11 +255,11 @@
 | classes_router | 10 | 3.1-3.2 |
 | recommendation_router | 2 | 2.2.4, 2.7.4 |
 | search_router | 1 | 5.1.1 |
-| analytics_router | 8 | 2.7.2-2.7.4, 3.4.2-3.4.4, 4.4.2-4.4.4 |
+| analytics_router | 5 | 2.7.2-2.7.3, 3.4.2-3.4.4 |
 | dashboard_router | 3 | 2.7.1, 3.4.1, 4.4.1 |
-| admin_router | 14 | 4.1-4.3 |
+| admin_router | 17 | 4.1-4.4 |
 
 ---
 
-**Ngày cập nhật:** 05/11/2025  
+**Ngày cập nhật:** 07/12/2025  
 

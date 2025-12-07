@@ -17,6 +17,24 @@ def generate_uuid() -> str:
 
 
 # ============================================================================
+# PROGRESS TRACKING MODELS
+# ============================================================================
+
+class LessonProgressItem(BaseModel):
+    """
+    Chi tiết tiến độ của một lesson
+    Sử dụng trong Progress.lessons_progress array
+    Tuân thủ: dashboard_service.py logic (parse by completion_date)
+    """
+    lesson_id: str = Field(..., description="UUID của lesson")
+    lesson_title: str = Field(..., description="Tên lesson")
+    status: str = Field(..., description="completed|in-progress|not-started")
+    completion_date: Optional[datetime] = Field(None, description="Ngày hoàn thành (null nếu chưa xong)")
+    time_spent_minutes: int = Field(default=0, description="Thời gian học lesson này (phút)")
+    video_progress_seconds: int = Field(default=0, description="Tiến độ xem video (giây)")
+
+
+# ============================================================================
 # EMBEDDED MODELS FOR COURSE (Lesson & Module nested in Course)
 # ============================================================================
 
@@ -32,6 +50,7 @@ class EmbeddedLesson(BaseModel):
     video_url: Optional[str] = None
     audio_url: Optional[str] = None  # URL audio file (mp3, wav, ogg)
     resources: List[dict] = Field(default_factory=list)
+    learning_objectives: List[str] = Field(default_factory=list, description="Mục tiêu học tập của lesson")
     quiz_id: Optional[str] = None
     is_published: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -154,6 +173,9 @@ class Lesson(Document):
     video_url: Optional[str] = Field(None, description="URL video bài học")
     audio_url: Optional[str] = Field(None, description="URL audio bài giảng (mp3, wav, ogg)")
     
+    # Learning objectives - ADDED theo API_SCHEMA.md Section 4.2
+    learning_objectives: List[str] = Field(default_factory=list, description="Mục tiêu học tập cụ thể của bài học")
+    
     # Resources theo schema structure
     resources: List[dict] = Field(default_factory=list, description="Tài liệu kèm theo")
     # Resource structure: {
@@ -252,6 +274,7 @@ class Course(Document):
     instructor_id: Optional[str] = Field(None, description="Instructor assigned to teach this course")
     instructor_name: Optional[str] = Field(None, description="Tên giảng viên (denormalized for performance)")
     instructor_avatar: Optional[str] = Field(None, description="Avatar giảng viên (denormalized for performance)")
+    instructor_bio: Optional[str] = Field(None, description="Bio giảng viên (denormalized for performance)")
     
     # Nội dung học tập - theo LearningOutcome schema từ course.py
     learning_outcomes: List[dict] = Field(default_factory=list, description="Mục tiêu học tập")
@@ -310,6 +333,8 @@ class Enrollment(Document):
     # Trạng thái - theo schemas
     status: str = Field(default="active", description="active|completed|cancelled")
     progress_percent: float = Field(default=0.0, description="Tiến độ 0-100")
+    # Alias for API compatibility - completion_rate same as progress_percent
+    completion_rate: float = Field(default=0.0, description="Alias của progress_percent cho API compatibility")
     
     # Thống kê - theo EnrollmentDetailResponse
     completed_lessons: List[str] = Field(default_factory=list, description="Danh sách UUID lessons đã hoàn thành")
@@ -572,15 +597,11 @@ class Progress(Document):
     completed_lessons_count: int = Field(default=0, description="Số lessons đã hoàn thành")
     total_lessons_count: int = Field(default=0, description="Tổng số lessons trong khóa học")
     
-    # Chi tiết từng lesson - theo LessonProgress schema
-    lessons_progress: List[dict] = Field(default_factory=list, description="Tiến độ từng lesson")
-    # Lesson progress structure: {
-    #   "lesson_id": "uuid",
-    #   "lesson_title": "tên lesson",
-    #   "status": "completed|in-progress|not-started",
-    #   "completion_date": datetime or null,
-    #   "time_spent_minutes": int
-    # }
+    # Chi tiết từng lesson - FIXED: Sử dụng LessonProgressItem schema
+    lessons_progress: List[LessonProgressItem] = Field(
+        default_factory=list, 
+        description="Tiến độ chi tiết từng lesson với validated structure"
+    )
     
     # Thống kê học tập - theo ProgressCourseResponse
     total_time_spent_minutes: int = Field(default=0, description="Tổng thời gian học (phút)")

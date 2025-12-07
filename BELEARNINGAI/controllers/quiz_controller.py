@@ -29,6 +29,7 @@ from schemas.quiz import (
     QuizAttemptResponse,
     QuizResultsResponse,
     QuizRetakeResponse,
+    RetakeQuestion,
     PracticeExercisesGenerateRequest,
     PracticeExercisesGenerateResponse,
     QuizCreateRequest,
@@ -102,14 +103,13 @@ async def handle_get_quiz_detail(
         id=str(quiz.id),
         title=quiz.title,
         description=quiz.description,
-        lesson_id=quiz.lesson_id,
-        course_id=quiz.course_id,
-        questions=quiz.questions,  # List of questions với answers
-        passing_score=quiz.passing_score,
-        max_attempts=quiz.max_attempts,
-        duration_minutes=quiz.time_limit_minutes,  # Use time_limit_minutes from model
-        attempts_count=len(attempts),
-        user_attempts=attempts[:3]  # 3 attempts gần nhất
+        question_count=len(quiz.questions),  # Fix: add missing field
+        time_limit=quiz.time_limit_minutes,  # Fix: correct field name
+        pass_threshold=int(quiz.passing_score),  # Fix: correct field name and type
+        mandatory_question_count=sum(1 for q in quiz.questions if q.get("is_mandatory", False)),  # Fix: calculate
+        user_attempts=len(attempts),  # Fix: should be int, not list
+        best_score=max([a.score for a in attempts]) if attempts else None,
+        last_attempt_at=attempts[0].started_at if attempts else None
     )
 
 
@@ -193,17 +193,30 @@ async def handle_attempt_quiz(
         answers=request.answers,
         score=score,
         passed=passed,
-        time_spent_minutes=request.time_spent_minutes
+        time_spent_minutes=request.time_spent_minutes or 0
     )
+    
+    if not attempt:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Không thể lưu kết quả quiz"
+        )
+    
+    # Ensure submitted_at is set
+    if not attempt.submitted_at:
+        attempt.submitted_at = datetime.utcnow()
     
     return QuizAttemptResponse(
         attempt_id=str(attempt.id),
-        score=score,
-        passed=passed,
-        total_questions=len(quiz.questions),
-        correct_answers=int(score * len(quiz.questions) / 100),
-        time_spent_minutes=request.time_spent_minutes,
-        attempt_number=len(attempts) + 1
+        quiz_id=str(quiz_id),
+        score=attempt.score,
+        passed=attempt.passed,
+        total_questions=attempt.total_questions,
+        correct_answers=attempt.correct_answers,
+        time_spent_minutes=attempt.time_spent_seconds // 60,
+        attempt_number=attempt.attempt_number,
+        submitted_at=attempt.submitted_at,
+        message="Chúc mừng! Bạn đã pass quiz" if attempt.passed else "Bạn chưa đạt điểm pass. Hãy thử lại!"
     )
 
 
@@ -262,10 +275,19 @@ async def handle_get_quiz_results(
             )
         attempt = attempts[0]
     
-    # Tạo results với explanation cho từng câu
+    # Build proper results structure
     results = await quiz_service.build_quiz_results(quiz, attempt)
     
-    return QuizResultsResponse(**results)
+    return QuizResultsResponse(
+        attempt_id=str(attempt.id),
+        quiz_id=str(quiz.id),
+        total_score=attempt.score,
+        status=attempt.status,
+        pass_threshold=quiz.passing_score,
+        results=results.get("question_results", []),
+        mandatory_passed=attempt.mandatory_passed,
+        can_retake=attempt.can_retake
+    )
 
 
 # ============================================================================
@@ -313,14 +335,23 @@ async def handle_retake_quiz(
                 detail="Bạn cần đăng ký khóa học"
             )
     
+    # Generate new quiz attempt
+    new_attempt = await quiz_service.create_new_attempt(user_id, original_quiz.id)
+    
     # Sinh quiz mới bằng AI
     new_quiz = await quiz_service.generate_retake_quiz(original_quiz)
     
     return QuizRetakeResponse(
-        new_quiz_id=str(new_quiz.id),
+        new_attempt_id=str(new_attempt.id),
+        quiz_id=str(original_quiz.id),
         message="Quiz mới đã được tạo với câu hỏi tương tự",
-        question_count=len(new_quiz.questions),
-        passing_score=new_quiz.passing_score
+        questions=[
+            RetakeQuestion(
+                id=str(q.get("id", "")),
+                content=q.get("question_text", ""),
+                options=q.get("options", [])
+            ) for q in new_quiz.questions
+        ]
     )
 
 
@@ -344,11 +375,24 @@ async def handle_generate_practice_exercises(
         
     Endpoint: POST /api/v1/ai/generate-practice
     """
-    # TODO: Implement AI practice generation
-    # Tạm thời return mock
+    # TODO: Implement AI practice generation with real AI service
+    # Mock response matches API_SCHEMA Section 4.11
+    from datetime import datetime
+    import uuid
+    
     return PracticeExercisesGenerateResponse(
+        practice_id=str(uuid.uuid4()),
+        source=SourceInfo(
+            lesson_id=request.lesson_id,
+            course_id=request.course_id,
+            topic_prompt=request.topic_prompt
+        ),
+        difficulty=request.difficulty,
         exercises=[],
-        message="Chức năng đang phát triển"
+        total_questions=request.question_count,
+        estimated_time=request.question_count * 2,  # 2 minutes per question
+        created_at=datetime.utcnow(),
+        message="Chức năng đang phát triển - sẽ tích hợp AI service"
     )
 
 

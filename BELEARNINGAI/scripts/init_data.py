@@ -34,6 +34,7 @@ from models.models import (
     Quiz,
     QuizAttempt,
     Progress,
+    LessonProgressItem,
     Conversation,
     Class,
     Recommendation,
@@ -205,6 +206,7 @@ Phù hợp cho: Người mới bắt đầu lập trình, sinh viên IT, develop
         instructor_id=instructor_id,
         instructor_name=instructor_name,
         instructor_avatar="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150",
+        instructor_bio="Giảng viên Python với 10 năm kinh nghiệm, chuyên gia về Machine Learning và Backend Development. Đã đào tạo hơn 5000 học viên thành công.",
         learning_outcomes=[
             {
                 "id": str(uuid.uuid4()),
@@ -633,6 +635,7 @@ for row in matrix:
                 video_url=lesson_content["video_url"],  # YouTube video thực tế
                 audio_url=f"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-{(lesson_order % 16) + 1}.mp3" if lesson_order % 2 == 0 else None,  # Demo audio công khai
                 resources=lesson_resources,
+                learning_objectives=lesson_info.get("learning_objectives", []),
                 quiz_id=quiz_id,
                 is_published=True
             )
@@ -651,6 +654,7 @@ for row in matrix:
                 video_url=lesson_content["video_url"],  # YouTube video thực tế
                 audio_url=f"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-{(lesson_order % 16) + 1}.mp3" if lesson_order % 2 == 0 else None,  # Demo audio công khai
                 resources=lesson_resources,
+                learning_objectives=lesson_info.get("learning_objectives", []),
                 quiz_id=quiz_id,
                 is_published=True,
                 created_at=datetime.utcnow(),
@@ -895,13 +899,14 @@ async def seed_progress(enrollment_ids: List[str]):
                 status = "completed"
                 completion_date = enrollment.enrolled_at + timedelta(days=random.randint(1, 20))
             
-            lessons_progress.append({
-                "lesson_id": lesson.id,
-                "lesson_title": lesson.title,
-                "status": status,
-                "completion_date": completion_date,
-                "time_spent_minutes": random.randint(5, 60) if status == "completed" else 0
-            })
+            lessons_progress.append(LessonProgressItem(
+                lesson_id=str(lesson.id),
+                lesson_title=lesson.title,
+                status=status,
+                completion_date=completion_date,
+                time_spent_minutes=random.randint(5, 60) if status == "completed" else 0,
+                video_progress_seconds=random.randint(0, 1800) if status in ["in-progress", "completed"] else None
+            ))
 
         progress = Progress(
             user_id=enrollment.user_id,
@@ -1238,6 +1243,7 @@ async def seed_personal_courses(user_ids: Dict[str, List[str]]) -> List[str]:
                     order=lesson_idx + 1,
                     content_type=random.choice(["text", "video", "mixed"]),
                     duration_minutes=random.randint(15, 45),
+                    learning_objectives=[f"Hiểu {fake.word()}", f"Thực hành {fake.word()}"],
                     is_published=random.choice([True, False]),
                     video_url=f"https://youtu.be/personal_{course_id}_{lesson_id}" if random.choice([True, False]) else None,
                     created_at=datetime.utcnow(),
@@ -1281,6 +1287,7 @@ async def seed_personal_courses(user_ids: Dict[str, List[str]]) -> List[str]:
             instructor_id=None,  # Personal course không có instructor
             instructor_name=None,
             instructor_avatar=None,
+            instructor_bio=None,  # Personal course không có instructor bio
             learning_outcomes=[
                 {
                     "id": str(uuid.uuid4()),

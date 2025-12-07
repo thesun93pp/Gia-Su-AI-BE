@@ -14,7 +14,7 @@ Controller này xử lý 6 endpoints:
 import logging
 from typing import Dict, Optional
 from fastapi import HTTPException, status
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Import schemas
 from schemas.learning import (
@@ -172,12 +172,21 @@ async def handle_get_lesson_content(
             detail="Lesson không tồn tại"
         )
     
-    # Check if lesson is locked
-    if lesson_data.get("is_next_locked") and not lesson_data.get("is_completed"):
-        # Check nếu đây là lesson bị khóa do chưa hoàn thành trước đó
-        # Logic đã xử lý trong service
-        pass
+    # Check if lesson is locked via navigation
+    navigation = lesson_data.get("navigation", {})
+    prev_lesson = navigation.get("previous_lesson")
+    if prev_lesson and prev_lesson.get("id"):
+        # Nếu có previous lesson, check xem nó đã completed chưa
+        enrollment = await enrollment_service.get_user_enrollment(user_id, course_id)
+        if enrollment and prev_lesson.get("id") not in enrollment.completed_lessons:
+            # Previous lesson chưa completed, lesson này bị khóa
+            if not lesson_data.get("completion_status", {}).get("is_completed"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Bạn cần hoàn thành bài học trước đó"
+                )
     
+    # Return service data directly - đã match với LessonContentResponse schema
     return LessonContentResponse(**lesson_data)
 
 
@@ -188,7 +197,7 @@ async def handle_get_lesson_content(
 async def handle_get_course_modules(
     course_id: str,
     current_user: Dict
-) -> CourseModulesResponse:
+) -> Dict:
     """
     Lấy danh sách tất cả modules trong course
     
@@ -197,7 +206,7 @@ async def handle_get_course_modules(
         current_user: User hiện tại
         
     Returns:
-        CourseModulesResponse
+        Dict with modules list
         
     Endpoint: GET /api/v1/courses/{course_id}/modules
     """
@@ -231,14 +240,14 @@ async def handle_get_course_modules(
             detail="Không tìm thấy modules"
         )
     
-    return CourseModulesResponse(**modules_data)
+    return modules_data
 
 
 async def handle_get_module_outcomes(
     course_id: str,
     module_id: str,
     current_user: Dict
-) -> ModuleOutcomesResponse:
+) -> Dict:
     """
     Lấy learning outcomes của module
     
@@ -248,7 +257,7 @@ async def handle_get_module_outcomes(
         current_user: User hiện tại
         
     Returns:
-        ModuleOutcomesResponse
+        Dict with outcomes
         
     Endpoint: GET /api/v1/courses/{course_id}/modules/{module_id}/outcomes
     """
@@ -275,14 +284,14 @@ async def handle_get_module_outcomes(
             detail="Module không tồn tại"
         )
     
-    return ModuleOutcomesResponse(**outcomes_data)
+    return outcomes_data
 
 
 async def handle_get_module_resources(
     course_id: str,
     module_id: str,
     current_user: Dict
-) -> ModuleResourcesResponse:
+) -> Dict:
     """
     Lấy tài nguyên học tập của module
     
@@ -292,7 +301,7 @@ async def handle_get_module_resources(
         current_user: User hiện tại
         
     Returns:
-        ModuleResourcesResponse
+        Dict with resources
         
     Endpoint: GET /api/v1/courses/{course_id}/modules/{module_id}/resources
     """
@@ -318,7 +327,7 @@ async def handle_get_module_resources(
             detail="Module không tồn tại"
         )
     
-    return ModuleResourcesResponse(**resources_data)
+    return resources_data
 
 
 async def handle_generate_module_assessment(
@@ -326,23 +335,26 @@ async def handle_generate_module_assessment(
     module_id: str,
     request: ModuleAssessmentGenerateRequest,
     current_user: Dict
-) -> ModuleAssessmentGenerateResponse:
+) -> Dict:
     """
-    Sinh quiz đánh giá tự động cho module
+    4.6: Generate AI-powered module assessment
+    Tuân thủ API_SCHEMA.md - Response 201 Created
     
-    Sử dụng AI để sinh quiz dựa trên:
-    - Learning outcomes của module
-    - Độ khó yêu cầu
-    - Số lượng câu hỏi
+    Flow:
+    1. Verify enrollment
+    2. Get module with learning outcomes
+    3. Call AI service to generate quiz questions (with fallback)
+    4. Create Quiz document
+    5. Return comprehensive response with full question details
     
     Args:
-        course_id: ID của course
-        module_id: ID của module
-        request: ModuleAssessmentGenerateRequest
-        current_user: User hiện tại
+        course_id: Course ID
+        module_id: Module ID
+        request: ModuleAssessmentGenerateRequest with assessment_type, question_count, etc.
+        current_user: Current user dict
         
     Returns:
-        ModuleAssessmentGenerateResponse
+        Dict matching API_SCHEMA.md structure with assessment_id, questions array, etc.
         
     Endpoint: POST /api/v1/courses/{course_id}/modules/{module_id}/assessments/generate
     """
@@ -350,16 +362,7 @@ async def handle_generate_module_assessment(
     
     logger.info(f"Generating module assessment - user: {user_id}, course: {course_id}, module: {module_id}")
     
-    # Kiểm tra enrollment
-    enrollment = await enrollment_service.get_user_enrollment(user_id, course_id)
-    if not enrollment or enrollment.status == "cancelled":
-        logger.warning(f"User {user_id} not enrolled in course {course_id}")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Bạn cần đăng ký khóa học"
-        )
-    
-    # Lấy course
+    # Verify course exists
     course = await course_service.get_course_by_id(course_id)
     if not course:
         logger.error(f"Course not found: {course_id}")
@@ -368,93 +371,141 @@ async def handle_generate_module_assessment(
             detail="Khóa học không tồn tại"
         )
     
-    # Tìm module trong course
-    module_data = None
-    for m in course.get("modules", []):
-        if m.get("id") == module_id:
-            module_data = m
+    # Verify enrollment (if not owner)
+    if course.owner_id != user_id:
+        enrollment = await enrollment_service.get_user_enrollment(user_id, course_id)
+        if not enrollment or enrollment.status == "cancelled":
+            logger.warning(f"User {user_id} not enrolled in course {course_id}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bạn cần đăng ký khóa học để tạo bài kiểm tra"
+            )
+    
+    # Get module with learning outcomes
+    module = None
+    for mod in course.modules:
+        if str(mod.id) == module_id:
+            module = mod
             break
     
-    if not module_data:
+    if not module:
         logger.error(f"Module not found: {module_id} in course {course_id}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Module không tồn tại"
+            detail="Module không tồn tại trong khóa học này"
         )
     
-    # Extract learning outcomes
-    learning_outcomes = module_data.get("learning_outcomes", [])
-    if not learning_outcomes:
+    # Prepare learning outcomes for AI
+    outcomes_list = []
+    for outcome in module.learning_outcomes:
+        outcomes_list.append({
+            "id": str(outcome.get("id", generate_uuid())),
+            "outcome": outcome.get("description", ""),
+            "skill_tag": outcome.get("skill_tag", "general"),
+            "is_mandatory": outcome.get("is_mandatory", False)
+        })
+    
+    if not outcomes_list:
         logger.warning(f"Module {module_id} has no learning outcomes")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Module không có learning outcomes để sinh quiz"
+            detail="Module chưa có learning outcomes để tạo bài kiểm tra"
         )
     
-    logger.info(f"Module has {len(learning_outcomes)} learning outcomes")
+    logger.info(f"Module has {len(outcomes_list)} learning outcomes")
     
-    # Generate quiz using AI
+    # Map difficulty_preference to difficulty for AI service
+    difficulty_map = {
+        "easy": "easy",
+        "mixed": "medium",
+        "hard": "hard"
+    }
+    difficulty = difficulty_map.get(request.difficulty_preference, "medium")
+    
+    # Call AI service to generate questions (with fallback on error)
     try:
-        ai_result = await generate_module_quiz(
-            module_title=module_data.get("title", ""),
-            module_description=module_data.get("description", ""),
-            learning_outcomes=learning_outcomes,
-            difficulty=request.difficulty,
-            question_count=request.question_count,
-            focus_outcomes=request.focus_outcomes
+        quiz_data = await generate_module_quiz(
+            module_title=module.title,
+            learning_outcomes=outcomes_list,
+            module_description=module.description,
+            question_count=request.question_count or 10,
+            difficulty=difficulty,
+            focus_outcomes=request.focus_topics  # Note: focus_topics are skill tags in request
         )
-        
-        logger.info(f"AI quiz generated - {len(ai_result['questions'])} questions, {ai_result['total_points']} points")
-    
-    except ValueError as e:
-        logger.error(f"AI quiz generation failed: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Không thể sinh quiz: {str(e)}"
-        )
-    
+        logger.info(f"Quiz generated - {len(quiz_data['questions'])} questions, {quiz_data['total_points']} points")
     except Exception as e:
-        logger.error(f"Unexpected error in quiz generation: {str(e)}", exc_info=True)
+        # This should not happen anymore since we added fallback in AI service
+        logger.error(f"Unexpected error in generate_module_quiz: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Lỗi hệ thống khi sinh quiz"
+            detail="Không thể tạo bài kiểm tra lúc này"
         )
     
-    # Create Quiz document in DB
-    try:
-        quiz = Quiz(
-            id=generate_uuid(),
-            lesson_id="module-assessment",  # Special marker for module-level quiz
-            course_id=course_id,
-            title=f"Quiz đánh giá - {module_data.get('title')}",
-            description=f"Quiz tự động sinh bởi AI để đánh giá module {module_data.get('title')}",
-            time_limit_minutes=ai_result["estimated_time_minutes"],
-            passing_score=70.0,
-            max_attempts=999,  # Unlimited retries
-            deadline=None,
-            is_draft=False,
-            questions=ai_result["questions"],
-            question_count=len(ai_result["questions"]),
-            total_points=ai_result["total_points"],
-            mandatory_question_count=ai_result["mandatory_count"],
-            created_by=user_id
-        )
-        
-        await quiz.insert()
-        logger.info(f"Quiz created successfully - id: {quiz.id}")
-    
-    except Exception as e:
-        logger.error(f"Failed to save quiz to DB: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Không thể lưu quiz vào database"
-        )
-    
-    return ModuleAssessmentGenerateResponse(
-        quiz_id=quiz.id,
+    # Create Quiz document
+    quiz_id = generate_uuid()
+    quiz = Quiz(
+        id=quiz_id,
+        course_id=course_id,
         module_id=module_id,
-        question_count=len(ai_result["questions"]),
-        difficulty=request.difficulty,
-        estimated_time_minutes=ai_result["estimated_time_minutes"],
-        message=f"Quiz đánh giá cho module đã được tạo với {len(ai_result['questions'])} câu hỏi (trong đó {ai_result['mandatory_count']} câu bắt buộc)"
+        lesson_id="module-assessment",  # Special marker for module-level quiz
+        title=f"Assessment: {module.title}",
+        description=f"Bài kiểm tra {request.assessment_type} cho module {module.title}",
+        quiz_type=request.assessment_type,  # review|practice|final_check
+        questions=quiz_data["questions"],
+        total_points=quiz_data["total_points"],
+        question_count=len(quiz_data["questions"]),
+        mandatory_question_count=quiz_data.get("mandatory_count", 0),
+        passing_score=70.0,  # 70% pass threshold
+        time_limit_minutes=request.time_limit_minutes or 15,
+        max_attempts=999 if request.assessment_type in ["review", "practice"] else 1,
+        is_draft=False,
+        deadline=None,
+        created_by=user_id,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow()
     )
+    
+    await quiz.insert()
+    logger.info(f"Quiz created successfully - id: {quiz_id}")
+    
+    # Calculate pass threshold percentage
+    pass_threshold = int(quiz.passing_score) if quiz.passing_score else 70
+    
+    # Prepare questions array matching API_SCHEMA format
+    questions_response = []
+    for q in quiz_data["questions"]:
+        question_obj = {
+            "question_id": str(generate_uuid()),
+            "order": q.get("order", 0),
+            "question_text": q.get("question_text", q.get("question", "")),
+            "question_type": q.get("type", "multiple_choice"),
+            "difficulty": difficulty,
+            "skill_tag": q.get("outcome_id", "general"),
+            "points": q.get("points", 10),
+            "is_mandatory": q.get("is_mandatory", False),
+            "options": [{"option_id": chr(65 + i), "content": opt} for i, opt in enumerate(q.get("options", []))],
+            "hint": q.get("explanation", "")[:100] if q.get("explanation") else None
+        }
+        questions_response.append(question_obj)
+    
+    # Prepare response matching API_SCHEMA.md
+    created_at = datetime.utcnow()
+    expires_at = created_at + timedelta(minutes=60)  # Expires in 60 minutes
+    can_retake = request.assessment_type in ["review", "practice"]
+    
+    return {
+        "assessment_id": quiz_id,
+        "module_id": module_id,
+        "module_title": module.title,
+        "assessment_type": request.assessment_type,
+        "question_count": len(quiz_data["questions"]),
+        "time_limit_minutes": quiz.time_limit_minutes,
+        "total_points": quiz.total_points,
+        "pass_threshold": pass_threshold,
+        "questions": questions_response,
+        "instructions": f"Hoàn thành bài kiểm tra {request.assessment_type} trong {quiz.time_limit_minutes} phút. Đạt {pass_threshold}% để pass.",
+        "created_at": created_at,
+        "expires_at": expires_at,
+        "can_retake": can_retake,
+        "message": "Bài kiểm tra module đã được tạo thành công"
+    }

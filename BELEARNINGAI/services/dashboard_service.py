@@ -144,7 +144,7 @@ async def get_learning_stats(user_id: str) -> Dict:
             # Get course
             course = await Course.get(enrollment.course_id)
             
-            # Get quiz score for this course
+            # Get quiz score for this course (chỉ từ active enrollments)
             quiz_attempts = await QuizAttempt.find(
                 QuizAttempt.user_id == user_id,
                 QuizAttempt.course_id == enrollment.course_id
@@ -164,9 +164,12 @@ async def get_learning_stats(user_id: str) -> Dict:
                 "status": enrollment.status
             })
     
-    # Lấy tất cả quiz attempts
+    # Lấy tất cả quiz attempts (chỉ từ active enrollments để tính tổng thể)
+    enrolled_course_ids = [e.course_id for e in enrollments if e.status == "active"]
+    
     all_quiz_attempts = await QuizAttempt.find(
-        QuizAttempt.user_id == user_id
+        QuizAttempt.user_id == user_id,
+        QuizAttempt.course_id.in_(enrolled_course_ids)  # FIX: Chỉ đếm quiz từ courses đang active
     ).to_list()
     
     # Đếm passed/failed
@@ -204,11 +207,12 @@ async def get_progress_chart(
     Lấy dữ liệu biểu đồ tiến độ theo thời gian
     
     Business Logic:
-    1. Query Progress với time filter
-    2. Group data theo ngày/tuần/tháng
-    3. Tính lessons completed và hours spent per time unit
-    4. Tạo chart data points
-    5. Tính summary statistics
+    1. Query enrollments đang active có last_accessed trong time range
+    2. Lấy Progress và parse lessons_progress array
+    3. Đếm lessons completed theo completion_date (incremental, không cumulative)
+    4. Tính hours spent từ time_spent_minutes trong từng lesson
+    5. Group data theo ngày/tuần/tháng
+    6. Tạo chart data points với summary statistics
     
     Args:
         user_id: ID của user
@@ -231,10 +235,12 @@ async def get_progress_chart(
     
     start_date = datetime.utcnow() - timedelta(days=days_back)
     
-    # Query enrollments
+    # FIX: Sử dụng enrollments với last_accessed_at để track activity theo ngày
+    # Thay vì dùng cumulative progress, ta đếm enrollments được accessed mỗi ngày
     query_filter = {
         "user_id": user_id,
-        "updated_at": {"$gte": start_date}
+        "status": "active",
+        "last_accessed_at": {"$gte": start_date}
     }
     
     if course_id:
@@ -242,34 +248,34 @@ async def get_progress_chart(
     
     enrollments = await Enrollment.find(query_filter).to_list()
     
-    # Lấy progress cho các enrollments
+    # Lấy progress để tính lessons completed
     course_ids = [e.course_id for e in enrollments]
     
     progress_list = await Progress.find(
         Progress.user_id == user_id,
-        Progress.course_id.in_(course_ids),
-        Progress.updated_at >= start_date
+        Progress.course_id.in_(course_ids)
     ).to_list()
     
-    # Group data theo date
-    # Vì không có history chi tiết lessons completed theo ngày,
-    # ta ước tính dựa trên updated_at và lessons_progress
+    # Group data theo date dựa trên lessons_progress history
+    # Đếm số lessons completed trong từng time period
     date_map = {}
     
     for progress in progress_list:
-        # Parse date
-        date_key = progress.updated_at.strftime(date_format)
-        
-        if date_key not in date_map:
-            date_map[date_key] = {
-                "lessons_completed": 0,
-                "hours_spent": 0.0
-            }
-        
-        # Tính lessons completed trong khoảng thời gian
-        # (Giả sử progress.completed_lessons_count là cumulative)
-        date_map[date_key]["lessons_completed"] += progress.completed_lessons_count
-        date_map[date_key]["hours_spent"] += progress.total_time_spent_minutes / 60.0
+        # Phân tích lessons_progress để đếm lessons completed theo ngày
+        for lesson_prog in progress.lessons_progress:
+            if lesson_prog.get("status") == "completed" and lesson_prog.get("completion_date"):
+                completion_date = lesson_prog["completion_date"]
+                if completion_date >= start_date:
+                    date_key = completion_date.strftime(date_format)
+                    
+                    if date_key not in date_map:
+                        date_map[date_key] = {
+                            "lessons_completed": 0,
+                            "hours_spent": 0.0
+                        }
+                    
+                    date_map[date_key]["lessons_completed"] += 1
+                    date_map[date_key]["hours_spent"] += lesson_prog.get("time_spent_minutes", 0) / 60.0
     
     # Tạo chart data points
     chart_data = []
@@ -439,6 +445,7 @@ async def get_instructor_class_stats(
     - List all instructor's classes or filter by class_id
     - For each class: student_count, attendance_rate, avg_progress, quiz_completion
     - Calculate active_students (last 7 days)
+    - FIX: Filter progress chỉ của students trong class (dựa trên enrollment user_ids)
     - Aggregate totals
     
     Args:
@@ -490,9 +497,13 @@ async def get_instructor_class_stats(
         attendance_rate = (active_students / student_count * 100) if student_count > 0 else 0
         all_attendance_rates.append(attendance_rate)
         
-        # Calculate avg progress
+        # FIX: Calculate avg progress - chỉ của students trong class này
+        # Lấy user_ids từ enrollments của class
+        enrollment_user_ids = [e.user_id for e in enrollments]
+        
         progress_list = await Progress.find(
-            Progress.course_id == cls.course_id
+            Progress.course_id == cls.course_id,
+            Progress.user_id.in_(enrollment_user_ids)  # FIX: Filter theo students của class
         ).to_list()
         
         avg_progress = sum(p.overall_progress_percent for p in progress_list) / len(progress_list) if progress_list else 0
@@ -547,8 +558,6 @@ async def get_instructor_class_stats(
         "avg_attendance": round(avg_attendance, 2),
         "avg_completion": round(avg_completion, 2)
     }
-
-
 async def get_instructor_progress_chart(
     instructor_id: str,
     time_range: str = "week",
@@ -561,6 +570,8 @@ async def get_instructor_progress_chart(
     - Get progress data across instructor's classes
     - Filter by time_range: day (7 days), week (4 weeks), month (6 months)
     - Filter by class_id if provided
+    - Chỉ đếm progress của students trong classes (filter qua enrollments)
+    - Parse lessons_progress theo completion_date (incremental, không cumulative)
     - Track: lessons_completed, quizzes_completed, active_students per time period
     - Create chart_data points
     
@@ -597,10 +608,18 @@ async def get_instructor_progress_chart(
     
     course_ids = [c.course_id for c in classes]
     
-    # Get progress data
+    # FIX: Get enrollments của classes để lấy student list
+    all_enrollments = await Enrollment.find(
+        Enrollment.course_id.in_(course_ids),
+        Enrollment.status == "active"
+    ).to_list()
+    
+    student_ids = [e.user_id for e in all_enrollments]
+    
+    # Get progress data (chỉ của students trong classes)
     progress_list = await Progress.find(
         Progress.course_id.in_(course_ids),
-        Progress.updated_at >= start_date
+        Progress.user_id.in_(student_ids)
     ).to_list()
     
     # Get quiz attempts
@@ -615,22 +634,26 @@ async def get_instructor_progress_chart(
         QuizAttempt.submitted_at >= start_date
     ).to_list()
     
-    # Group data by date
+    # Group data by date dựa trên lessons_progress completion_date
     date_map = {}
     
-    # Track lessons completed
+    # Track lessons completed theo ngày (parse từ lessons_progress)
     for progress in progress_list:
-        date_key = progress.updated_at.strftime(date_format)
-        
-        if date_key not in date_map:
-            date_map[date_key] = {
-                "lessons_completed": 0,
-                "quizzes_completed": 0,
-                "active_students": set()
-            }
-        
-        date_map[date_key]["lessons_completed"] += progress.completed_lessons_count
-        date_map[date_key]["active_students"].add(progress.user_id)
+        for lesson_prog in progress.lessons_progress:
+            if lesson_prog.get("status") == "completed" and lesson_prog.get("completion_date"):
+                completion_date = lesson_prog["completion_date"]
+                if completion_date >= start_date:
+                    date_key = completion_date.strftime(date_format)
+                    
+                    if date_key not in date_map:
+                        date_map[date_key] = {
+                            "lessons_completed": 0,
+                            "quizzes_completed": 0,
+                            "active_students": set()
+                        }
+                    
+                    date_map[date_key]["lessons_completed"] += 1
+                    date_map[date_key]["active_students"].add(progress.user_id)
     
     # Track quiz attempts
     for attempt in quiz_attempts:
@@ -987,17 +1010,15 @@ async def get_users_growth_analytics(time_range: str, role_filter: Optional[str]
         },
         "generated_at": datetime.utcnow().isoformat()
     }
-
-
 async def get_course_analytics(time_range: str, category_filter: Optional[str] = None) -> Dict:
     """
     Phân tích khóa học chuyên sâu
     
     Business Logic:
-    1. Top courses theo enrollment count
+    1. Top courses theo enrollment count (CHỈ enrollments trong time_range dựa trên enrolled_at)
     2. Completion rates của các khóa học
-    3. Trends tạo khóa học mới
-    4. Performance metrics
+    3. Trends tạo khóa học mới (theo created_at của Course)
+    4. Performance metrics với category filter
     
     Args:
         time_range: "7d", "30d", "90d"
@@ -1015,9 +1036,9 @@ async def get_course_analytics(time_range: str, category_filter: Optional[str] =
     if category_filter:
         course_query["category"] = category_filter
     
-    # Get top courses by enrollment
+    # Get top courses by enrollment (chỉ đếm enrollments trong time_range)
     enrollment_pipeline = [
-        {"$match": {"created_at": {"$gte": start_date}}},
+        {"$match": {"enrolled_at": {"$gte": start_date}}},  # FIX: Sử dụng enrolled_at thay vì created_at
         {"$group": {"_id": "$course_id", "enrollments": {"$sum": 1}}},
         {"$sort": {"enrollments": -1}},
         {"$limit": 10}

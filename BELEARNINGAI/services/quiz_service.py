@@ -216,12 +216,29 @@ async def create_quiz_attempt(
     mandatory_total = sum(1 for q in quiz.questions if q.get("is_mandatory", False))
     
     if answers and score is not None:
-        answer_map = {ans.get("question_id"): ans for ans in answers}
+        # Handle both dict and Pydantic model answers
+        answer_map = {}
+        for ans in answers:
+            if hasattr(ans, 'question_id'):
+                answer_map[ans.question_id] = ans
+            else:
+                answer_map[ans.get("question_id")] = ans
         
         for question in quiz.questions:
             q_id = question.get("question_id") or question.get("id")
-            user_answer_obj = answer_map.get(q_id, {})
-            user_answer = user_answer_obj.get("answer") or user_answer_obj.get("student_answer")
+            user_answer_obj = answer_map.get(q_id)
+            
+            # Extract answer from Pydantic model or dict
+            if user_answer_obj:
+                if hasattr(user_answer_obj, 'selected_option'):
+                    user_answer = user_answer_obj.selected_option
+                elif hasattr(user_answer_obj, 'answer'):
+                    user_answer = user_answer_obj.answer
+                else:
+                    user_answer = user_answer_obj.get("answer") or user_answer_obj.get("student_answer")
+            else:
+                user_answer = None
+            
             correct_answer = question.get("correct_answer")
             is_mandatory = question.get("is_mandatory", False)
             
@@ -232,10 +249,25 @@ async def create_quiz_attempt(
     
     mandatory_passed = (mandatory_correct == mandatory_total) if mandatory_total > 0 else True
     
+    # Convert AnswerItem objects to dicts if needed
+    answers_list = []
+    if answers:
+        for ans in answers:
+            if hasattr(ans, 'model_dump'):
+                answers_list.append(ans.model_dump())
+            elif isinstance(ans, dict):
+                answers_list.append(ans)
+            else:
+                # Handle AnswerItem with direct attributes
+                answers_list.append({
+                    "question_id": getattr(ans, 'question_id', ''),
+                    "selected_option": getattr(ans, 'selected_option', '')
+                })
+    
     attempt = QuizAttempt(
         quiz_id=quiz_id,
         user_id=user_id,
-        answers=answers or [],
+        answers=answers_list,
         score=score or 0.0,
         status="Pass" if passed else "Fail",
         passed=passed or False,
@@ -403,7 +435,15 @@ async def grade_quiz_attempt(quiz: Quiz, answers: List[Dict]) -> tuple[float, bo
     mandatory_correct = 0
     mandatory_total = sum(1 for q in quiz.questions if q.get("is_mandatory", False))
     
-    answer_map = {ans["question_id"]: ans.get("answer") or ans.get("student_answer") for ans in answers}
+    # Convert AnswerItem objects to dict for processing
+    answer_map = {}
+    for ans in answers:
+        if hasattr(ans, 'question_id'):
+            # AnswerItem object - access as attributes
+            answer_map[ans.question_id] = ans.selected_option
+        else:
+            # Already a dict
+            answer_map[ans["question_id"]] = ans.get("answer") or ans.get("student_answer") or ans.get("selected_option")
     
     for question in quiz.questions:
         q_id = question.get("question_id") or question.get("id")
@@ -1028,3 +1068,21 @@ async def get_class_quiz_results(quiz_id: str, class_id: str) -> Dict:
         "student_ranking": student_ranking,
         "difficult_questions": difficult_questions
     }
+
+
+async def create_new_attempt(user_id: str, quiz_id: str) -> QuizAttempt:
+    """Tạo attempt mới cho retake quiz"""
+    existing_attempts = await get_user_quiz_attempts(user_id, quiz_id)
+    attempt_number = len(existing_attempts) + 1
+    
+    new_attempt = QuizAttempt(
+        quiz_id=quiz_id,
+        user_id=user_id,
+        attempt_number=attempt_number,
+        answers=[],
+        score=0.0,
+        status="in_progress"
+    )
+    await new_attempt.insert()
+    return new_attempt
+

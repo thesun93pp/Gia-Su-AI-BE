@@ -53,16 +53,26 @@ async def handle_create_course_from_prompt(
         course_data = await personal_courses_service.create_course_from_ai_prompt(
             user_id=user_id,
             prompt=request.prompt,
-            category=request.category,
-            level=request.level
+            level=request.level,
+            estimated_duration_weeks=request.estimated_duration_weeks,
+            language=request.language
+        )
+        return CourseFromPromptResponse(**course_data)
+    except ValueError as e:
+        # Validation errors from Pydantic
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Validation error: {str(e)}"
         )
     except Exception as e:
+        # Log the full error for debugging
+        import traceback
+        print(f"Error creating course from prompt:")
+        print(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi khi tạo khóa học từ AI: {str(e)}"
         )
-    
-    return CourseFromPromptResponse(**course_data)
 
 
 # ============================================================================

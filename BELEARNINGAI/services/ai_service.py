@@ -540,7 +540,7 @@ Lưu ý:
 
 async def chat_with_course_context(
     course_id: str,
-    user_message: str,
+    question: str,
     conversation_history: Optional[List[Dict]] = None
 ) -> str:
     """
@@ -548,31 +548,36 @@ async def chat_with_course_context(
     
     Args:
         course_id: ID của khóa học
-        user_message: Tin nhắn từ user
+        question: Câu hỏi từ user
         conversation_history: Lịch sử chat trước đó (optional)
         
     Returns:
         Câu trả lời từ AI
     """
-    # Lấy thông tin khóa học từ database
-    course = await Course.get(course_id)
+    import logging
+    logger = logging.getLogger(__name__)
     
-    if not course:
-        return "Không tìm thấy thông tin khóa học."
-    
-    # Tạo context từ khóa học
-    course_context = _build_course_context(course)
-    
-    # Tạo conversation context
-    history_text = ""
-    if conversation_history:
-        for msg in conversation_history[-5:]:  # Lấy 5 tin nhắn gần nhất
-            role = msg.get("role", "user")
-            content = msg.get("content", "")
-            history_text += f"{role}: {content}\n"
-    
-    # Tạo prompt
-    prompt = f"""
+    try:
+        # Lấy thông tin khóa học từ database
+        course = await Course.get(course_id)
+        
+        if not course:
+            logger.warning(f"Course not found: {course_id}")
+            return "Không tìm thấy thông tin khóa học."
+        
+        # Tạo context từ khóa học (tóm gọn)
+        course_context = _build_course_context(course)
+        
+        # Tạo conversation context (5 messages gần nhất - đủ cho AI free)
+        history_text = ""
+        if conversation_history and len(conversation_history) > 0:
+            for msg in conversation_history[-5:]:
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                history_text += f"{role}: {content}\n"
+        
+        # Tạo prompt
+        prompt = f"""
 Bạn là trợ lý AI hỗ trợ học tập cho khóa học sau:
 
 THÔNG TIN KHÓA HỌC:
@@ -582,29 +587,30 @@ LỊCH SỬ HỘI THOẠI:
 {history_text}
 
 CÂU HỎI MỚI TỪ HỌC VIÊN:
-{user_message}
+{question}
 
 Hãy trả lời câu hỏi dựa trên thông tin khóa học. Trả lời bằng tiếng Việt, ngắn gọn và dễ hiểu.
 Nếu câu hỏi không liên quan đến khóa học, hãy lịch sự nhắc nhở học viên tập trung vào nội dung khóa học.
 """
-    
-    try:
+        
         response = model.generate_content(prompt)
         return response.text.strip()
     
     except Exception as e:
+        logger.error(f"Error in chat_with_course_context: {str(e)}", exc_info=True)
         return "Xin lỗi, tôi không thể trả lời câu hỏi này lúc này. Vui lòng thử lại sau."
 
 
 def _build_course_context(course: Course) -> str:
     """
-    Tạo text context từ Course document
+    Tạo text context từ Course document (tóm gọn cho AI free)
+    Chỉ lấy thông tin cơ bản: title, description, modules/lessons structure
     
     Args:
         course: Course document
         
     Returns:
-        String chứa thông tin khóa học
+        String chứa thông tin khóa học (tối ưu cho token limit)
     """
     context = f"""
 Tên khóa học: {course.title}
@@ -615,16 +621,20 @@ Mức độ: {course.level}
 Kết quả học tập:
 """
     
-    for outcome in course.learning_outcomes:
+    # Chỉ lấy tối đa 5 learning outcomes đầu tiên
+    for i, outcome in enumerate(course.learning_outcomes[:5]):
         context += f"- {outcome.get('description', '')}\n"
+        if i >= 4:  # Giới hạn 5 outcomes
+            break
     
     context += "\nNội dung khóa học:\n"
     
-    for module in course.modules:
-        context += f"\n## Module: {module.title}\n"
-        context += f"{module.description}\n"
+    # Chỉ liệt kê cấu trúc modules và lessons (không thêm description chi tiết)
+    for idx, module in enumerate(course.modules[:10]):  # Giới hạn 10 modules
+        context += f"\n## Module {idx + 1}: {module.title}\n"
         
-        for lesson in module.lessons:
+        # Chỉ list tên lessons, không thêm description
+        for lesson in module.lessons[:8]:  # Giới hạn 8 lessons/module
             context += f"  - Bài {lesson.order}: {lesson.title}\n"
     
     return context
@@ -858,18 +868,43 @@ Trả về JSON với cấu trúc:
         
     except (json.JSONDecodeError, ValueError, KeyError) as e:
         print(f"AI course generation validation error: {str(e)}")
-        # Fallback structure
+        # Fallback structure với learning_outcomes đúng format
         return {
             "title": f"Khóa học về {prompt[:50]}",
             "description": f"Khóa học được tạo tự động dựa trên yêu cầu: {prompt}",
             "category": "General",
             "level": difficulty,
-            "estimated_duration": 20,
+            "learning_outcomes": [
+                {
+                    "id": "lo1",
+                    "description": f"Hiểu được khái niệm cơ bản về {prompt[:30]}",
+                    "skill_tag": "basic-understanding"
+                },
+                {
+                    "id": "lo2",
+                    "description": "Áp dụng được kiến thức vào thực tế",
+                    "skill_tag": "practical-application"
+                }
+            ],
             "modules": [
                 {
                     "title": "Module 1: Giới thiệu",
                     "description": "Module giới thiệu khóa học",
                     "order": 1,
+                    "difficulty": "Basic",
+                    "estimated_hours": 2,
+                    "learning_outcomes": [
+                        {
+                            "id": "m1_lo1",
+                            "description": "Nắm được tổng quan về khóa học",
+                            "skill_tag": "overview"
+                        },
+                        {
+                            "id": "m1_lo2",
+                            "description": "Chuẩn bị kiến thức nền tảng",
+                            "skill_tag": "foundation"
+                        }
+                    ],
                     "lessons": [
                         {
                             "title": "Bài 1: Tổng quan",
@@ -884,18 +919,43 @@ Trả về JSON với cấu trúc:
         }
     except Exception as e:
         print(f"Unexpected error in course generation: {str(e)}")
-        # Same fallback structure
+        # Same fallback structure với learning_outcomes đúng format
         return {
             "title": f"Khóa học về {prompt[:50]}",
             "description": f"Khóa học được tạo tự động dựa trên yêu cầu: {prompt}",
             "category": "General",
             "level": difficulty,
-            "estimated_duration": 20,
+            "learning_outcomes": [
+                {
+                    "id": "lo1",
+                    "description": f"Hiểu được khái niệm cơ bản về {prompt[:30]}",
+                    "skill_tag": "basic-understanding"
+                },
+                {
+                    "id": "lo2",
+                    "description": "Áp dụng được kiến thức vào thực tế",
+                    "skill_tag": "practical-application"
+                }
+            ],
             "modules": [
                 {
                     "title": "Module 1: Giới thiệu",
                     "description": "Module giới thiệu khóa học",
                     "order": 1,
+                    "difficulty": "Basic",
+                    "estimated_hours": 2,
+                    "learning_outcomes": [
+                        {
+                            "id": "m1_lo1",
+                            "description": "Nắm được tổng quan về khóa học",
+                            "skill_tag": "overview"
+                        },
+                        {
+                            "id": "m1_lo2",
+                            "description": "Chuẩn bị kiến thức nền tảng",
+                            "skill_tag": "foundation"
+                        }
+                    ],
                     "lessons": [
                         {
                             "title": "Bài 1: Tổng quan",
@@ -1148,9 +1208,166 @@ Chỉ trả về JSON thuần túy, không có markdown code block hay text th�
     except json.JSONDecodeError as e:
         print(f"Failed to parse AI response as JSON: {str(e)}")
         print(f"Response text: {response_text[:500]}")
-        raise ValueError(f"AI returned invalid JSON: {str(e)}")
+        print(f"Returning fallback questions for module: {module_title}")
+        return _generate_module_quiz_fallback(
+            module_title=module_title,
+            learning_outcomes=outcomes_subset,
+            question_count=question_count,
+            difficulty=difficulty
+        )
     
     except Exception as e:
         print(f"Error in generate_module_quiz: {str(e)}")
-        raise
+        print(f"Returning fallback questions for module: {module_title}")
+        return _generate_module_quiz_fallback(
+            module_title=module_title,
+            learning_outcomes=outcomes_subset,
+            question_count=question_count,
+            difficulty=difficulty
+        )
+
+
+def _generate_module_quiz_fallback(
+    module_title: str,
+    learning_outcomes: List[Dict],
+    question_count: int,
+    difficulty: str
+) -> Dict:
+    """
+    Generate fallback quiz questions when AI is unavailable.
+    
+    Args:
+        module_title: Title of the module
+        learning_outcomes: List of learning outcomes
+        question_count: Number of questions to generate
+        difficulty: Difficulty level
+        
+    Returns:
+        Dict with quiz structure matching Quiz model schema
+    """
+    questions = []
+    total_points = 0
+    mandatory_count = 0
+    
+    # Calculate distribution based on question count
+    mc_count = int(question_count * 0.6)  # 60% multiple choice
+    fb_count = int(question_count * 0.25)  # 25% fill in blank
+    tf_count = question_count - mc_count - fb_count  # remaining true/false
+    
+    # Ensure at least 1 of each type if possible
+    if question_count >= 3:
+        if mc_count == 0:
+            mc_count = 1
+        if fb_count == 0 and question_count > 3:
+            fb_count = 1
+        if tf_count == 0 and question_count > 4:
+            tf_count = 1
+        # Recalculate to ensure sum equals question_count
+        total = mc_count + fb_count + tf_count
+        if total > question_count:
+            tf_count = question_count - mc_count - fb_count
+    
+    # Set points based on difficulty
+    if difficulty == "easy":
+        base_points = 5
+    elif difficulty == "hard":
+        base_points = 15
+    else:
+        base_points = 10
+    
+    order = 1
+    
+    # Generate multiple choice questions
+    for i in range(mc_count):
+        # Cycle through outcomes
+        outcome = learning_outcomes[i % len(learning_outcomes)]
+        outcome_text = outcome.get("outcome", "knowledge")
+        outcome_id = outcome.get("id", "")
+        is_mandatory = outcome.get("is_mandatory", False)
+        
+        question = {
+            "question_text": f"[Fallback] Câu hỏi trắc nghiệm về: {outcome_text}",
+            "type": "multiple_choice",
+            "options": [
+                "A. Đáp án mẫu A",
+                "B. Đáp án mẫu B", 
+                "C. Đáp án mẫu C",
+                "D. Đáp án mẫu D"
+            ],
+            "correct_answer": "A. Đáp án mẫu A",
+            "explanation": f"Giải thích mẫu cho câu hỏi về {outcome_text}",
+            "points": base_points,
+            "is_mandatory": is_mandatory,
+            "order": order,
+            "outcome_id": outcome_id
+        }
+        
+        if is_mandatory:
+            mandatory_count += 1
+        
+        total_points += base_points
+        questions.append(question)
+        order += 1
+    
+    # Generate fill in blank questions
+    for i in range(fb_count):
+        outcome = learning_outcomes[(mc_count + i) % len(learning_outcomes)]
+        outcome_text = outcome.get("outcome", "knowledge")
+        outcome_id = outcome.get("id", "")
+        is_mandatory = outcome.get("is_mandatory", False)
+        
+        question = {
+            "question_text": f"[Fallback] Điền vào chỗ trống liên quan đến: {outcome_text}",
+            "type": "fill_in_blank",
+            "options": [],
+            "correct_answer": "đáp án mẫu",
+            "explanation": f"Giải thích mẫu cho câu điền chỗ trống về {outcome_text}",
+            "points": base_points,
+            "is_mandatory": is_mandatory,
+            "order": order,
+            "outcome_id": outcome_id
+        }
+        
+        if is_mandatory:
+            mandatory_count += 1
+        
+        total_points += base_points
+        questions.append(question)
+        order += 1
+    
+    # Generate true/false questions
+    for i in range(tf_count):
+        outcome = learning_outcomes[(mc_count + fb_count + i) % len(learning_outcomes)]
+        outcome_text = outcome.get("outcome", "knowledge")
+        outcome_id = outcome.get("id", "")
+        is_mandatory = outcome.get("is_mandatory", False)
+        
+        question = {
+            "question_text": f"[Fallback] Đúng hay sai: {outcome_text}",
+            "type": "true_false",
+            "options": ["Đúng", "Sai"],
+            "correct_answer": "Đúng",
+            "explanation": f"Giải thích mẫu cho câu đúng/sai về {outcome_text}",
+            "points": base_points,
+            "is_mandatory": is_mandatory,
+            "order": order,
+            "outcome_id": outcome_id
+        }
+        
+        if is_mandatory:
+            mandatory_count += 1
+        
+        total_points += base_points
+        questions.append(question)
+        order += 1
+    
+    # Estimate time: 1.5 minutes per question
+    estimated_time = int(question_count * 1.5)
+    
+    return {
+        "questions": questions,
+        "total_points": total_points,
+        "mandatory_count": mandatory_count,
+        "estimated_time_minutes": estimated_time
+    }
 

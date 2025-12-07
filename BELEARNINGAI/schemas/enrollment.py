@@ -45,7 +45,7 @@ class EnrollmentListItem(BaseModel):
     completed_at: Optional[datetime] = None
     avg_quiz_score: Optional[float] = Field(None, description="0-100")
     total_time_spent_minutes: int
-    next_lesson: NextLessonInfo
+    next_lesson: Optional[NextLessonInfo] = Field(None, description="Next lesson info if available")
 
 
 class EnrollmentSummary(BaseModel):

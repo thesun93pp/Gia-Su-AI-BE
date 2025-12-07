@@ -29,11 +29,18 @@ class AnswerItem(BaseModel):
 
 class QuizAttemptRequest(BaseModel):
     answers: List[AnswerItem]
+    time_spent_minutes: Optional[int] = Field(None, description="Time spent on quiz in minutes")
 
 
 class QuizAttemptResponse(BaseModel):
     attempt_id: str = Field(..., description="UUID")
     quiz_id: str = Field(..., description="UUID")
+    score: float = Field(..., description="0-100")
+    passed: bool = Field(..., description="Đã đạt yêu cầu pass hay chưa")
+    total_questions: int = Field(..., description="Tổng số câu hỏi")
+    correct_answers: int = Field(..., description="Số câu trả lời đúng")
+    time_spent_minutes: int = Field(..., description="Thời gian làm bài (phút)")
+    attempt_number: int = Field(..., description="Lần thử thứ mấy")
     submitted_at: datetime
     message: str
 

@@ -747,78 +747,35 @@ async def get_classes_list_admin(
     skip = (page - 1) * limit
     classes = await query.skip(skip).limit(limit).to_list()
     
-    # Format class data
+    # Format class data - match API_SCHEMA Section 9.13
     classes_data = []
     for class_obj in classes:
         # Get instructor info
         instructor = await User.get(class_obj.instructor_id)
-        instructor_info = {
-            "instructor_id": str(instructor.id),
-            "instructor_name": instructor.full_name,
-            "instructor_email": instructor.email
-        } if instructor else None
+        instructor_name = instructor.full_name if instructor else "Unknown"
         
         # Get course info
         course = await Course.get(class_obj.course_id)
         course_title = course.title if course else "Unknown Course"
         
-        # Calculate student statistics
+        # Calculate student count
         student_count = len(class_obj.students)
-        
-        # Calculate average progress (if available)
-        total_progress = 0
-        progress_count = 0
-        for student_id in class_obj.students:
-            # Get student progress in this course
-            progress = await Progress.find_one(
-                Progress.user_id == student_id,
-                Progress.course_id == class_obj.course_id
-            )
-            if progress:
-                total_progress += progress.completion_percentage
-                progress_count += 1
-        
-        avg_progress = round(total_progress / progress_count, 2) if progress_count > 0 else 0
         
         classes_data.append({
             "class_id": str(class_obj.id),
             "class_name": class_obj.class_name,
-            "description": class_obj.description,
-            "course_id": str(class_obj.course_id),
             "course_title": course_title,
-            "instructor": instructor_info,
+            "instructor_name": instructor_name,
+            "student_count": student_count,
             "status": class_obj.status,
-            "schedule": class_obj.schedule,
-            "created_at": class_obj.created_at.isoformat(),
-            "start_date": class_obj.start_date.isoformat() if class_obj.start_date else None,
-            "end_date": class_obj.end_date.isoformat() if class_obj.end_date else None,
-            "statistics": {
-                "student_count": student_count,
-                "avg_progress": avg_progress,
-                "max_students": class_obj.max_students
-            }
+            "created_at": class_obj.created_at.isoformat()
         })
     
-    # Calculate pagination
-    total_pages = (total_count + limit - 1) // limit
-    
     return {
-        "classes": classes_data,
-        "pagination": {
-            "current_page": page,
-            "total_pages": total_pages,
-            "total_items": total_count,
-            "items_per_page": limit,
-            "has_next": page < total_pages,
-            "has_prev": page > 1
-        },
-        "filters": {
-            "search": search,
-            "instructor_filter": instructor_filter,
-            "status_filter": status_filter,
-            "sort_by": sort_by,
-            "sort_order": sort_order
-        }
+        "data": classes_data,
+        "total": total_count,
+        "skip": skip,
+        "limit": limit
     }
 
 
@@ -849,100 +806,70 @@ async def get_class_detail_admin(class_id: str) -> Dict:
             detail="Class không tồn tại"
         )
     
-    # Get instructor info
+    # Get instructor info - match API_SCHEMA Section 9.14
     instructor = await User.get(class_obj.instructor_id)
     instructor_info = {
-        "instructor_id": str(instructor.id),
-        "instructor_name": instructor.full_name,
-        "instructor_email": instructor.email,
-        "instructor_phone": instructor.phone
+        "user_id": str(instructor.id),
+        "full_name": instructor.full_name,
+        "email": instructor.email
     } if instructor else None
     
-    # Get course info
+    # Get course info - match API_SCHEMA Section 9.14
     course = await Course.get(class_obj.course_id)
     course_info = {
         "course_id": str(course.id),
-        "course_title": course.title,
-        "course_description": course.description,
-        "course_category": course.category,
-        "course_status": course.status
+        "title": course.title,
+        "category": course.category
     } if course else None
     
-    # Get detailed student information
-    students_detail = []
+    # Calculate class statistics for all students
     total_progress = 0
     progress_count = 0
+    completed_count = 0
+    
+    # Calculate active students today
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    active_today = 0
     
     for student_id in class_obj.students:
-        # Get student info
-        student = await User.get(student_id)
-        if not student:
-            continue
-        
-        # Get student's enrollment
-        enrollment = await Enrollment.find_one(
-            Enrollment.user_id == student_id,
-            Enrollment.course_id == class_obj.course_id
-        )
-        
         # Get student's progress
         progress = await Progress.find_one(
             Progress.user_id == student_id,
             Progress.course_id == class_obj.course_id
         )
         
-        enrollment_status = enrollment.status if enrollment else "unknown"
-        progress_percentage = progress.completion_percentage if progress else 0
-        last_accessed = progress.last_accessed if progress else None
-        
-        # Add to total for average calculation
         if progress:
-            total_progress += progress_percentage
+            total_progress += progress.completion_percentage
             progress_count += 1
-        
-        students_detail.append({
-            "student_id": str(student.id),
-            "student_name": student.full_name,
-            "student_email": student.email,
-            "enrollment_status": enrollment_status,
-            "progress_percentage": progress_percentage,
-            "last_accessed": last_accessed.isoformat() if last_accessed else None,
-            "enrolled_at": enrollment.created_at.isoformat() if enrollment else None
-        })
+            
+            # Check if completed (100% progress)
+            if progress.completion_percentage >= 100:
+                completed_count += 1
+            
+            # Check if active today
+            if progress.last_accessed and progress.last_accessed >= today_start:
+                active_today += 1
     
-    # Calculate class statistics
-    avg_progress = round(total_progress / progress_count, 2) if progress_count > 0 else 0
-    active_students = len([s for s in students_detail if s["enrollment_status"] == "active"])
-    completed_students = len([s for s in students_detail if s["enrollment_status"] == "completed"])
-    
-    # Calculate recent activity (last 7 days)
-    seven_days_ago = datetime.utcnow() - timedelta(days=7)
-    recent_activity_count = len([
-        s for s in students_detail 
-        if s["last_accessed"] and datetime.fromisoformat(s["last_accessed"].replace('Z', '+00:00')) >= seven_days_ago
-    ])
+    # Calculate statistics
+    average_progress = round(total_progress / progress_count, 2) if progress_count > 0 else 0
+    completion_rate = round((completed_count / len(class_obj.students)) * 100, 2) if len(class_obj.students) > 0 else 0
     
     return {
         "class_id": str(class_obj.id),
         "class_name": class_obj.class_name,
-        "description": class_obj.description,
+        "course": course_info,
+        "instructor": instructor_info,
+        "student_count": len(class_obj.students),
+        "invite_code": class_obj.invite_code,
         "status": class_obj.status,
-        "schedule": class_obj.schedule,
+        "class_stats": {
+            "average_progress": average_progress,
+            "completion_rate": completion_rate,
+            "active_students_today": active_today
+        },
         "created_at": class_obj.created_at.isoformat(),
         "start_date": class_obj.start_date.isoformat() if class_obj.start_date else None,
-        "end_date": class_obj.end_date.isoformat() if class_obj.end_date else None,
-        "max_students": class_obj.max_students,
-        "instructor": instructor_info,
-        "course": course_info,
-        "students": students_detail,
-        "statistics": {
-            "total_students": len(students_detail),
-            "active_students": active_students,
-            "completed_students": completed_students,
-            "avg_progress": avg_progress,
-            "recent_activity_count": recent_activity_count,
-            "capacity_utilization": round(len(students_detail) / class_obj.max_students * 100, 2) if class_obj.max_students > 0 else 0
-        }
+        "end_date": class_obj.end_date.isoformat() if class_obj.end_date else None
     }
 
 

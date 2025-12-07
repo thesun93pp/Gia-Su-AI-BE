@@ -27,7 +27,7 @@ from schemas.personal_courses import (
 )
 
 
-router = APIRouter(prefix="/personal-courses", tags=["Personal Courses"])
+router = APIRouter(prefix="/courses", tags=["Personal Courses"])
 
 
 # ============================================================================

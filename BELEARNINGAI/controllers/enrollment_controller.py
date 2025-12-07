@@ -169,7 +169,6 @@ async def handle_list_my_enrollments(
                         next_lesson_info = NextLessonInfo(
                             lesson_id=lesson.id,
                             lesson_title=lesson.title,
-                            module_id=module.id,
                             module_title=module.title
                         )
                         break
@@ -305,7 +304,6 @@ async def handle_get_enrollment_detail(
                     next_lesson_info = NextLessonInfo(
                         lesson_id=lesson.id,
                         lesson_title=lesson.title,
-                        module_id=module.id,
                         module_title=module.title
                     )
                     break

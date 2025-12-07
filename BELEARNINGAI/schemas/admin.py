@@ -14,11 +14,17 @@ class AdminUserListItem(BaseModel):
     email: str
     avatar: Optional[str] = None
     role: str = Field(..., description="student|instructor|admin")
-    status: str = Field(..., description="active|inactive")
+    status: str = Field(..., description="active|inactive|banned")
     created_at: datetime
     last_login_at: Optional[datetime] = None
-    enrollment_count: Optional[int] = Field(None, description="For student")
-    class_count: Optional[int] = Field(None, description="For instructor")
+    courses_enrolled: Optional[int] = Field(None, description="For student only")
+    classes_created: Optional[int] = Field(None, description="For instructor only")
+
+
+class UserSummary(BaseModel):
+    total_users: int
+    active_users: int
+    new_users_this_month: int
 
 
 class AdminUserListResponse(BaseModel):
@@ -26,7 +32,7 @@ class AdminUserListResponse(BaseModel):
     total: int
     skip: int
     limit: int
-    has_next: bool
+    summary: UserSummary
 
 
 class UserStatistics(BaseModel):
@@ -54,20 +60,29 @@ class TeachingClass(BaseModel):
     created_at: datetime
 
 
+class ProfileInfo(BaseModel):
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
+class ActivitySummary(BaseModel):
+    courses_enrolled: int
+    classes_created: int
+    total_study_hours: int
+    login_streak_days: int
+
+
 class AdminUserDetailResponse(BaseModel):
     user_id: str = Field(..., description="UUID")
     full_name: str
     email: str
-    avatar: Optional[str] = None
-    bio: Optional[str] = None
     role: str = Field(..., description="student|instructor|admin")
-    status: str = Field(..., description="active|inactive")
+    status: str = Field(..., description="active|inactive|banned")
     created_at: datetime
-    updated_at: datetime
     last_login_at: Optional[datetime] = None
-    statistics: UserStatistics
-    current_enrollments: Optional[List[CurrentEnrollment]] = None
-    teaching_classes: Optional[List[TeachingClass]] = None
+    profile: ProfileInfo
+    activity_summary: ActivitySummary
 
 
 class AdminCreateUserRequest(BaseModel):
@@ -292,17 +307,13 @@ class AdminDeleteCourseResponse(BaseModel):
 # ============================================================================
 
 class AdminClassListItem(BaseModel):
-    """Schema cho danh sách lớp học trong admin panel"""
+    """Schema cho danh sách lớp học trong admin panel - API_SCHEMA Section 9.13"""
     class_id: str = Field(..., description="UUID lớp học")
     class_name: str = Field(..., description="Tên lớp học")
-    instructor_name: str = Field(..., description="Tên giảng viên")
-    instructor_email: str = Field(..., description="Email giảng viên")
     course_title: str = Field(..., description="Khóa học gốc")
+    instructor_name: str = Field(..., description="Tên giảng viên")
     student_count: int = Field(..., description="Số học viên hiện tại")
-    max_students: int = Field(..., description="Số học viên tối đa")
-    status: str = Field(..., description="preparing|active|completed")
-    start_date: datetime = Field(..., description="Thời gian bắt đầu")
-    end_date: datetime = Field(..., description="Thời gian kết thúc")
+    status: str = Field(..., description="active|completed")
     created_at: datetime = Field(..., description="Ngày tạo lớp")
 
 
@@ -312,58 +323,39 @@ class AdminClassListResponse(BaseModel):
     total: int = Field(..., description="Tổng số lớp học")
     skip: int = Field(..., description="Pagination offset")
     limit: int = Field(..., description="Pagination limit")
-    has_next: bool = Field(..., description="Còn trang tiếp theo không")
 
 
-class AdminClassStudentItem(BaseModel):
-    """Schema cho học viên trong lớp (admin view)"""
-    student_id: str = Field(..., description="UUID học viên")
-    student_name: str = Field(..., description="Tên học viên")
-    student_email: str = Field(..., description="Email học viên")
-    avatar_url: Optional[str] = Field(None, description="URL avatar")
-    progress: float = Field(..., description="Tiến độ học tập (0-100)")
-    lessons_completed: int = Field(..., description="Số bài học đã hoàn thành")
-    avg_quiz_score: float = Field(..., description="Điểm quiz trung bình (0-100)")
-    last_activity: Optional[datetime] = Field(None, description="Lần hoạt động cuối")
-    joined_at: datetime = Field(..., description="Ngày tham gia lớp")
-    enrollment_status: str = Field(..., description="enrolled|completed|dropped")
+class AdminCourseInfo(BaseModel):
+    """Thông tin khóa học trong admin class detail"""
+    course_id: str = Field(..., description="UUID khóa học")
+    title: str = Field(..., description="Tên khóa học")
+    category: str = Field(..., description="Danh mục khóa học")
+
+
+class AdminInstructorInfo(BaseModel):
+    """Thông tin giảng viên trong admin class detail"""
+    user_id: str = Field(..., description="UUID giảng viên")
+    full_name: str = Field(..., description="Tên giảng viên")
+    email: str = Field(..., description="Email giảng viên")
 
 
 class AdminClassStats(BaseModel):
-    """Thống kê tổng quan lớp học"""
-    total_students: int = Field(..., description="Tổng số học viên")
-    active_students: int = Field(..., description="Số học viên còn hoạt động")
-    avg_progress: float = Field(..., description="Tiến độ trung bình (0-100)")
-    avg_quiz_score: float = Field(..., description="Điểm quiz trung bình (0-100)")
+    """Thống kê lớp học trong admin class detail"""
+    average_progress: float = Field(..., description="Tiến độ trung bình (0-100)")
     completion_rate: float = Field(..., description="Tỷ lệ hoàn thành (0-100)")
-    total_lessons: int = Field(..., description="Tổng số bài học trong khóa")
-    total_quizzes: int = Field(..., description="Tổng số quiz")
-
-
-class AdminClassInstructorInfo(BaseModel):
-    """Thông tin giảng viên của lớp"""
-    instructor_id: str = Field(..., description="UUID giảng viên")
-    instructor_name: str = Field(..., description="Tên giảng viên")
-    instructor_email: str = Field(..., description="Email giảng viên")
-    instructor_avatar: Optional[str] = Field(None, description="Avatar giảng viên")
-    bio: Optional[str] = Field(None, description="Tiểu sử giảng viên")
-    total_classes: int = Field(..., description="Tổng số lớp đang dạy")
-    total_students_taught: int = Field(..., description="Tổng số học viên đã dạy")
+    active_students_today: int = Field(..., description="Số học viên hoạt động hôm nay")
 
 
 class AdminClassDetailResponse(BaseModel):
     """Response cho GET /api/v1/admin/classes/{class_id}"""
     class_id: str = Field(..., description="UUID lớp học")
     class_name: str = Field(..., description="Tên lớp học")
-    description: str = Field(..., description="Mô tả lớp học")
-    course_id: str = Field(..., description="UUID khóa học gốc")
-    course_title: str = Field(..., description="Tên khóa học gốc")
+    course: AdminCourseInfo = Field(..., description="Thông tin khóa học")
+    instructor: AdminInstructorInfo = Field(..., description="Thông tin giảng viên")
+    student_count: int = Field(..., description="Số học viên hiện tại")
     invite_code: str = Field(..., description="Mã mời tham gia")
     status: str = Field(..., description="preparing|active|completed")
+    class_stats: AdminClassStats = Field(..., description="Thống kê lớp học")
+    created_at: datetime = Field(..., description="Ngày tạo lớp")
     start_date: datetime = Field(..., description="Thời gian bắt đầu")
     end_date: datetime = Field(..., description="Thời gian kết thúc")
-    max_students: int = Field(..., description="Số học viên tối đa")
-    created_at: datetime = Field(..., description="Ngày tạo lớp")
-    instructor_info: AdminClassInstructorInfo = Field(..., description="Thông tin giảng viên")
-    students: List[AdminClassStudentItem] = Field(..., description="Danh sách học viên")
-    stats: AdminClassStats = Field(..., description="Thống kê lớp học")

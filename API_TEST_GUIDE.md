@@ -1393,3 +1393,1259 @@ python -m scripts.init_data
 8. **Test Admin**: Manage Users → Courses → Analytics (admin only)
 
 **🎯 Kết quả mong đợi**: Tất cả API trả về đúng status code và data structure theo schema định nghĩa!
+
+---
+
+## 🔄 LUỒNG CHỨC NĂNG END-TO-END CẦN TEST
+
+> **Tổng số luồng E2E**: 25 luồng  
+> **Mục đích**: Đảm bảo các chức năng hoạt động trọn vẹn từ đầu đến cuối, logic ăn khớp giữa các module
+
+---
+
+### **NHÓM 1: AUTHENTICATION & USER MANAGEMENT** 🔐
+
+#### **E2E-01: Đăng ký và kích hoạt tài khoản Student**
+**Mục đích**: Test luồng đăng ký tài khoản mới và xác thực thông tin
+
+**Các bước**:
+```
+1. POST /api/v1/auth/register
+   Body: {
+     "email": "newstudent@test.com",
+     "password": "Student@123",
+     "full_name": "New Student Test",
+     "role": "student"
+   }
+   ✓ Verify: 201 Created, user_id trả về
+
+2. Kiểm tra MongoDB
+   ✓ Verify: User tồn tại với email đã đăng ký
+   ✓ Verify: Password đã được hash
+
+3. POST /api/v1/auth/login
+   Body: {
+     "email": "newstudent@test.com",
+     "password": "Student@123"
+   }
+   ✓ Verify: 200 OK, access_token + refresh_token
+
+4. GET /api/v1/users/me
+   Headers: Authorization: Bearer {access_token}
+   ✓ Verify: full_name, email, role đúng
+   ✓ Verify: user_id khớp với response đăng ký
+```
+
+**Expected Results**:
+- ✅ Tài khoản được tạo thành công
+- ✅ Login thành công với credentials vừa tạo
+- ✅ JWT tokens hoạt động bình thường
+- ✅ Profile đầy đủ thông tin
+
+---
+
+#### **E2E-02: Luồng đăng nhập và refresh token**
+**Mục đích**: Test JWT authentication flow và token refresh mechanism
+
+**Các bước**:
+```
+1. POST /api/v1/auth/login
+   Body: {
+     "email": "admin.super@ailab.com.vn",
+     "password": "Admin@12345"
+   }
+   ✓ Save: access_token, refresh_token
+
+2. GET /api/v1/users/me
+   Headers: Authorization: Bearer {access_token}
+   ✓ Verify: 200 OK, user data
+
+3. [Giả lập token hết hạn - Mock hoặc đợi]
+   GET /api/v1/users/me (với access_token cũ)
+   ✓ Verify: 401 Unauthorized
+
+4. POST /api/v1/auth/refresh
+   Body: { "refresh_token": "{refresh_token}" }
+   ✓ Verify: 200 OK, access_token mới
+
+5. GET /api/v1/users/me
+   Headers: Authorization: Bearer {new_access_token}
+   ✓ Verify: 200 OK, user data
+
+6. POST /api/v1/auth/logout
+   Headers: Authorization: Bearer {access_token}
+   ✓ Verify: 200 OK
+
+7. GET /api/v1/users/me (với token đã logout)
+   ✓ Verify: 401 Unauthorized, token đã bị revoke
+```
+
+**Expected Results**:
+- ✅ Refresh token hoạt động khi access_token hết hạn
+- ✅ Logout vô hiệu hóa tokens
+- ✅ Không thể dùng token đã logout
+
+---
+
+#### **E2E-03: Cập nhật profile và avatar**
+**Mục đích**: Test chức năng update thông tin cá nhân
+
+**Các bước**:
+```
+1. POST /api/v1/auth/login (student)
+   ✓ Save: access_token
+
+2. GET /api/v1/users/me
+   ✓ Save: current full_name, bio
+
+3. PATCH /api/v1/users/me
+   Body: {
+     "full_name": "Updated Name",
+     "bio": "New bio description",
+     "phone": "+84912345678"
+   }
+   ✓ Verify: 200 OK
+
+4. GET /api/v1/users/me
+   ✓ Verify: full_name = "Updated Name"
+   ✓ Verify: bio = "New bio description"
+   ✓ Verify: phone = "+84912345678"
+   ✓ Verify: updated_at đã thay đổi
+```
+
+**Expected Results**:
+- ✅ Profile được cập nhật thành công
+- ✅ Thông tin mới reflect ngay lập tức
+- ✅ Timestamp updated_at được cập nhật
+
+---
+
+### **NHÓM 2: ASSESSMENT & PERSONALIZED LEARNING** 🎯
+
+#### **E2E-04: Luồng đánh giá năng lực AI hoàn chỉnh**
+**Mục đích**: Test toàn bộ quy trình assessment từ generate → submit → results → recommendations
+
+**Các bước**:
+```
+1. POST /api/v1/auth/login (student)
+   ✓ Save: access_token
+
+2. POST /api/v1/assessments/generate
+   Body: {
+     "category": "Programming",
+     "topic": "Python Basics",
+     "level": "Beginner"
+   }
+   ✓ Verify: 201 Created
+   ✓ Save: session_id
+   ✓ Verify: questions[] có 15 câu (Beginner)
+   ✓ Verify: Tỷ lệ độ khó: ~20% Easy, ~50% Medium, ~30% Hard
+   ✓ Verify: Mỗi câu có: question_id, question_text, options[], difficulty, skill_tag
+
+3. POST /api/v1/assessments/{session_id}/submit
+   Body: {
+     "answers": [
+       { "question_id": "q1", "selected_answer": "A" },
+       { "question_id": "q2", "selected_answer": "B" },
+       ...
+     ]
+   }
+   ✓ Verify: 200 OK
+
+4. GET /api/v1/assessments/{session_id}/results
+   ✓ Verify: score (0-100)
+   ✓ Verify: proficiency_level (Beginner/Intermediate/Advanced)
+   ✓ Verify: skill_analysis[] với mỗi skill:
+     - skill_tag
+     - questions_count
+     - correct_count
+     - proficiency_percentage
+     - strength_level (Strong/Average/Weak)
+   ✓ Verify: knowledge_gaps[] (các lỗ hổng kiến thức)
+   ✓ Verify: time_analysis (thời gian làm bài)
+   ✓ Verify: ai_feedback (nhận xét chi tiết)
+
+5. GET /api/v1/recommendations/from-assessment?session_id={session_id}
+   ✓ Verify: user_proficiency_level
+   ✓ Verify: recommended_courses[] được sắp xếp theo priority_rank
+   ✓ Verify: Mỗi course có:
+     - course_id, title, category, level
+     - relevance_score (0-100)
+     - reason (lý do AI đề xuất)
+     - addresses_gaps[] (gaps được giải quyết)
+   ✓ Verify: suggested_learning_order[] (thứ tự học tối ưu)
+   ✓ Verify: practice_exercises[] (bài tập đề xuất)
+   ✓ Verify: ai_personalized_advice
+```
+
+**Expected Results**:
+- ✅ AI sinh đúng số lượng câu hỏi theo level
+- ✅ Chấm điểm và phân tích skill chính xác
+- ✅ Recommendations phù hợp với kết quả assessment
+- ✅ Learning path được cá nhân hóa
+
+---
+
+#### **E2E-05: Retake assessment với câu hỏi khác**
+**Mục đích**: Verify AI sinh câu hỏi mới cho mỗi lần assessment
+
+**Các bước**:
+```
+1. Hoàn thành E2E-04
+   ✓ Save: questions[] lần 1, session_id_1
+
+2. POST /api/v1/assessments/generate
+   Body: { (cùng category, topic, level như lần 1) }
+   ✓ Save: questions[] lần 2, session_id_2
+
+3. So sánh questions[]
+   ✓ Verify: session_id_1 ≠ session_id_2
+   ✓ Verify: Nội dung câu hỏi khác nhau (ít nhất 70%)
+   ✓ Verify: Skill tags coverage tương tự
+   ✓ Verify: Tỷ lệ độ khó tương đương
+
+4. Submit và compare results
+   ✓ Verify: Kết quả phản ánh đúng answers
+```
+
+**Expected Results**:
+- ✅ Mỗi lần generate có bộ câu hỏi khác nhau
+- ✅ Chất lượng và coverage đồng đều
+- ✅ Tránh học thuộc lòng
+
+---
+
+### **NHÓM 3: COURSE ENROLLMENT & LEARNING** 📚
+
+#### **E2E-06: Tìm và enroll khóa học**
+**Mục đích**: Test luồng tìm kiếm, xem chi tiết và enroll course
+
+**Các bước**:
+```
+1. POST /api/v1/auth/login (student)
+   ✓ Save: access_token
+
+2. GET /api/v1/courses?search=Python&category=Programming
+   ✓ Verify: Courses liên quan đến Python
+   ✓ Save: course_id của course muốn enroll
+
+3. GET /api/v1/courses/{course_id}
+   ✓ Verify: Course detail đầy đủ:
+     - title, description, instructor_info
+     - modules[] với lessons[]
+     - difficulty_level, estimated_duration
+   ✓ Verify: is_enrolled = false (chưa enroll)
+
+4. POST /api/v1/enrollments
+   Body: { "course_id": "{course_id}" }
+   ✓ Verify: 201 Created
+   ✓ Save: enrollment_id
+
+5. GET /api/v1/enrollments/my-courses
+   ✓ Verify: Course vừa enroll xuất hiện
+   ✓ Verify: enrollment_status = "active"
+   ✓ Verify: progress_percentage = 0
+
+6. GET /api/v1/courses/{course_id}
+   ✓ Verify: is_enrolled = true
+   ✓ Verify: Student có quyền xem modules/lessons
+
+7. GET /api/v1/courses/{course_id}/modules
+   ✓ Verify: Modules list với lessons
+   ✓ Verify: Mỗi lesson có: lesson_id, title, content_type
+```
+
+**Expected Results**:
+- ✅ Search hoạt động chính xác
+- ✅ Enrollment thành công
+- ✅ Student có quyền truy cập nội dung sau enroll
+
+---
+
+#### **E2E-07: Học bài và hoàn thành lesson**
+**Mục đích**: Test progress tracking khi học lesson
+
+**Các bước**:
+```
+1. Student đã enroll course (từ E2E-06)
+   ✓ Have: course_id, enrollment_id
+
+2. GET /api/v1/courses/{course_id}/modules
+   ✓ Save: lesson_id đầu tiên
+
+3. GET /api/v1/lessons/{lesson_id}
+   ✓ Verify: Lesson content (markdown format)
+   ✓ Verify: has_quiz (true/false)
+   ✓ Save: quiz_id nếu có
+
+4. POST /api/v1/progress/lessons/{lesson_id}/complete
+   Headers: Authorization: Bearer {token}
+   ✓ Verify: 200 OK
+
+5. GET /api/v1/progress/courses/{course_id}
+   ✓ Verify: completed_lessons[] chứa lesson_id vừa complete
+   ✓ Verify: completion_percentage tăng
+   ✓ Verify: lessons_completed tăng 1
+   ✓ Verify: last_accessed updated
+
+6. Lặp lại bước 3-5 với các lessons khác
+   ✓ Verify: Progress tăng tuyến tính
+   ✓ Verify: completion_percentage đến 100% khi hoàn thành tất cả
+```
+
+**Expected Results**:
+- ✅ Lesson content hiển thị đầy đủ
+- ✅ Progress tracking chính xác
+- ✅ Completion percentage tính đúng
+
+---
+
+#### **E2E-08: Làm quiz và pass/fail**
+**Mục đích**: Test quiz flow với retry mechanism
+
+**Các bước**:
+```
+1. Student đang học lesson có quiz
+   ✓ Have: lesson_id, quiz_id
+
+2. GET /api/v1/quizzes/lessons/{lesson_id}/quiz
+   ✓ Verify: Quiz detail:
+     - title, description, time_limit
+     - questions[], passing_score
+     - total_points
+
+3. POST /api/v1/quizzes/{quiz_id}/attempts
+   Body: {
+     "answers": [
+       { "question_id": "q1", "answer": "A" },
+       { "question_id": "q2", "answer": "B" },
+       ...
+     ],
+     "time_taken": 120
+   }
+   ✓ Save: attempt_id
+
+4. GET /api/v1/quizzes/{quiz_id}/results?attempt_id={attempt_id}
+   ✓ Verify: score (0-100)
+   ✓ Verify: passed (true/false)
+   ✓ Verify: correct_answers_count
+   ✓ Verify: detailed_feedback[] cho từng câu
+   ✓ Verify: skill_performance[]
+
+5. CASE: Nếu FAILED (passed = false)
+   POST /api/v1/quizzes/{quiz_id}/retake
+   ✓ Verify: 200 OK
+   ✓ Verify: new_quiz_id (AI sinh quiz tương tự)
+   ✓ Save: new_quiz_id
+
+6. Làm lại quiz mới và PASS
+   POST /api/v1/quizzes/{new_quiz_id}/attempts
+   (Với answers đúng hơn)
+   ✓ Verify: passed = true
+
+7. Kiểm tra progress
+   GET /api/v1/progress/courses/{course_id}
+   ✓ Verify: Quiz được mark completed
+   ✓ Verify: Progress updated
+```
+
+**Expected Results**:
+- ✅ Quiz attempts được track
+- ✅ Scoring chính xác
+- ✅ Retake mechanism hoạt động (AI sinh quiz mới)
+- ✅ Progress chỉ update khi pass
+
+---
+
+### **NHÓM 4: AI CHATBOT & LEARNING SUPPORT** 🤖
+
+#### **E2E-09: Chat với AI trong context khóa học**
+**Mục đích**: Test AI chatbot với course context và conversation history
+
+**Các bước**:
+```
+1. Student đã enroll course
+   ✓ Have: course_id
+
+2. POST /api/v1/chat/conversations
+   Body: { "course_id": "{course_id}" }
+   ✓ Verify: 201 Created
+   ✓ Save: conversation_id
+
+3. POST /api/v1/chat/conversations/{conversation_id}/messages
+   Body: {
+     "question": "Giải thích về Python list comprehension"
+   }
+   ✓ Verify: 200 OK
+   ✓ Verify: Response có:
+     - message_id
+     - question (echo back)
+     - answer (markdown format, detailed)
+     - sources[] (optional - RAG references)
+     - related_lessons[]
+     - tokens_used (optional)
+     - timestamp
+   ✓ Save: message_id, answer
+
+4. POST /api/v1/chat/conversations/{conversation_id}/messages
+   Body: {
+     "question": "Cho ví dụ cụ thể về list comprehension"
+   }
+   (Follow-up question)
+   ✓ Verify: AI hiểu context từ câu trước
+   ✓ Verify: Response có ví dụ code cụ thể
+
+5. GET /api/v1/chat/conversations/{conversation_id}
+   ✓ Verify: Conversation detail:
+     - conversation_id
+     - course: { course_id, title }
+     - messages[] có đầy đủ 2 messages
+     - Mỗi message có: message_id, role (user/assistant), content, timestamp
+     - created_at, updated_at
+
+6. Verify conversation history
+   ✓ messages[0].role = "user"
+   ✓ messages[0].content = câu hỏi đầu
+   ✓ messages[1].role = "assistant"
+   ✓ messages[1].content = câu trả lời đầu
+   ✓ messages[2].role = "user"
+   ✓ messages[3].role = "assistant"
+```
+
+**Expected Results**:
+- ✅ AI response có context về course
+- ✅ Follow-up questions maintain conversation flow
+- ✅ History được lưu đầy đủ
+- ✅ Response quality tốt (markdown format, detailed)
+
+---
+
+#### **E2E-10: Chat history và search**
+**Mục đích**: Test quản lý conversations
+
+**Các bước**:
+```
+1. POST /api/v1/auth/login (student)
+   ✓ Tạo nhiều conversations (ít nhất 3)
+
+2. GET /api/v1/chat/conversations
+   ✓ Verify: List all conversations
+   ✓ Verify: Mỗi item có:
+     - conversation_id
+     - course_title
+     - last_message_preview
+     - message_count
+     - updated_at
+
+3. GET /api/v1/chat/conversations?course_id={course_id}
+   ✓ Verify: Chỉ conversations của course đó
+   ✓ Verify: Filter hoạt động đúng
+
+4. GET /api/v1/chat/conversations/{conversation_id}
+   ✓ Verify: Chi tiết conversation
+   ✓ Verify: Full messages history
+
+5. DELETE /api/v1/chat/conversations/{conversation_id}
+   ✓ Verify: 200 OK
+
+6. GET /api/v1/chat/conversations/{conversation_id}
+   ✓ Verify: 404 Not Found (conversation đã xóa)
+
+7. GET /api/v1/chat/conversations
+   ✓ Verify: Conversation đã bị remove khỏi list
+```
+
+**Expected Results**:
+- ✅ List conversations hoạt động
+- ✅ Filter by course_id chính xác
+- ✅ Delete conversation success
+- ✅ Soft/hard delete được handle đúng
+
+---
+
+### **NHÓM 5: PRACTICE EXERCISES (AI GENERATED)** 💪
+
+#### **E2E-11: AI sinh bài tập luyện tập cá nhân hóa**
+**Mục đích**: Test AI practice generation với multiple input sources
+
+**Các bước**:
+```
+1. POST /api/v1/auth/login (student)
+
+2. CASE 1: Generate từ lesson_id
+   POST /api/v1/ai/generate-practice
+   Body: {
+     "lesson_id": "{lesson_id}",
+     "difficulty": "medium",
+     "question_count": 10,
+     "practice_type": "multiple_choice"
+   }
+   ✓ Verify: 201 Created
+   ✓ Save: practice_id_1
+
+3. CASE 2: Generate từ course_id
+   POST /api/v1/ai/generate-practice
+   Body: {
+     "course_id": "{course_id}",
+     "difficulty": "hard",
+     "question_count": 15,
+     "practice_type": "mixed"
+   }
+   ✓ Save: practice_id_2
+
+4. CASE 3: Generate từ topic_prompt
+   POST /api/v1/ai/generate-practice
+   Body: {
+     "topic_prompt": "Python loops and iterations",
+     "difficulty": "easy",
+     "question_count": 5,
+     "focus_skills": ["python-loops", "control-flow"]
+   }
+   ✓ Save: practice_id_3
+
+5. Verify response structure cho tất cả cases
+   ✓ practice_id (UUID)
+   ✓ source: { lesson_id OR course_id OR topic_prompt }
+   ✓ difficulty
+   ✓ exercises[] với đúng số lượng
+   ✓ Mỗi exercise có:
+     - id, type (theory/coding/problem-solving)
+     - question, options[], correct_answer
+     - explanation, difficulty, related_skill, points
+   ✓ total_questions
+   ✓ estimated_time (minutes)
+   ✓ created_at
+
+6. Làm bài tập (submit logic tương tự quiz)
+   [Mock submit - API chưa implement]
+
+7. Verify quality
+   ✓ Câu hỏi bám sát topic
+   ✓ Độ khó phù hợp với request
+   ✓ Explanation chi tiết
+```
+
+**Expected Results**:
+- ✅ AI generate từ 3 sources: lesson, course, topic_prompt
+- ✅ Số lượng và độ khó đúng yêu cầu
+- ✅ Practice exercises chất lượng cao
+- ✅ Schema match API_SCHEMA.md Section 4.11
+
+---
+
+### **NHÓM 6: CLASS MANAGEMENT (INSTRUCTOR)** 👨‍🏫
+
+#### **E2E-12: Instructor tạo và quản lý lớp học**
+**Mục đích**: Test full class lifecycle từ create → update → manage
+
+**Các bước**:
+```
+1. POST /api/v1/auth/login (instructor)
+   ✓ Save: instructor_token
+
+2. GET /api/v1/courses (courses của instructor)
+   ✓ Save: course_id để tạo class
+
+3. POST /api/v1/classes
+   Body: {
+     "course_id": "{course_id}",
+     "class_name": "Python K01 2025",
+     "description": "Lớp Python cơ bản khóa 01",
+     "max_students": 30,
+     "schedule": "Mon, Wed, Fri 19:00-21:00",
+     "start_date": "2025-01-15",
+     "end_date": "2025-03-15"
+   }
+   ✓ Verify: 201 Created
+   ✓ Save: class_id, invite_code
+   ✓ Verify: invite_code được generate (6-8 ký tự)
+   ✓ Verify: status = "preparing"
+
+4. GET /api/v1/classes/my-classes
+   ✓ Verify: Class vừa tạo xuất hiện
+   ✓ Verify: student_count = 0
+
+5. GET /api/v1/classes/{class_id}
+   ✓ Verify: Class detail đầy đủ:
+     - class_name, description, course_title
+     - instructor_name (chính instructor đã login)
+     - max_students, student_count
+     - invite_code, status, schedule
+     - created_at, start_date, end_date
+
+6. PATCH /api/v1/classes/{class_id}
+   Body: {
+     "class_name": "Python Advanced K01 2025",
+     "max_students": 40,
+     "status": "active"
+   }
+   ✓ Verify: 200 OK
+
+7. GET /api/v1/classes/{class_id}
+   ✓ Verify: Thông tin đã update
+   ✓ Verify: status = "active"
+```
+
+**Expected Results**:
+- ✅ Class được tạo với invite_code
+- ✅ Update class thành công
+- ✅ Instructor có full control
+
+---
+
+#### **E2E-13: Student join class bằng invite code**
+**Mục đích**: Test enrollment flow via invite code
+
+**Các bước**:
+```
+1. Instructor tạo class (từ E2E-12)
+   ✓ Have: class_id, invite_code
+
+2. POST /api/v1/auth/login (student1)
+   ✓ Save: student1_token
+
+3. POST /api/v1/classes/join
+   Body: { "invite_code": "{invite_code}" }
+   Headers: Authorization: Bearer {student1_token}
+   ✓ Verify: 200 OK
+   ✓ Verify: Message: "Joined class successfully"
+
+4. GET /api/v1/classes/my-classes
+   Headers: Authorization: Bearer {student1_token}
+   ✓ Verify: Class xuất hiện trong list
+   ✓ Verify: role = "student"
+
+5. Instructor check
+   GET /api/v1/classes/{class_id}
+   Headers: Authorization: Bearer {instructor_token}
+   ✓ Verify: student_count = 1
+   ✓ Verify: students[] chứa student1_id
+
+6. Student2 join
+   POST /api/v1/auth/login (student2)
+   POST /api/v1/classes/join với cùng invite_code
+   ✓ Verify: Success
+
+7. Instructor check lại
+   GET /api/v1/classes/{class_id}
+   ✓ Verify: student_count = 2
+   ✓ Verify: students[] chứa cả student1 và student2
+
+8. Test max_students limit
+   [Join thêm students đến khi đủ max_students]
+   POST /api/v1/classes/join (student thứ 31)
+   ✓ Verify: 400 Bad Request
+   ✓ Verify: Message: "Class is full"
+```
+
+**Expected Results**:
+- ✅ Join bằng invite_code thành công
+- ✅ Student count tăng chính xác
+- ✅ Max students limit được enforce
+
+---
+
+#### **E2E-14: Instructor xem progress học viên**
+**Mục đích**: Test analytics và tracking cho instructor
+
+**Các bước**:
+```
+1. Class có students đã join và học (từ E2E-13)
+   ✓ Students đã complete lessons, làm quizzes
+
+2. Instructor login
+   GET /api/v1/classes/{class_id}/students
+   ✓ Verify: List all students trong class
+   ✓ Verify: Mỗi student có:
+     - student_id, student_name, email
+     - progress_percentage
+     - completed_lessons, total_lessons
+     - average_quiz_score
+     - last_accessed
+
+3. GET /api/v1/classes/{class_id}/students/{student_id}
+   ✓ Verify: Chi tiết progress của student:
+     - Student info
+     - Course progress: completion_percentage, completed_lessons[]
+     - Quiz results: attempts[], scores[], average_score
+     - Learning streak: study_streak_days
+     - Time spent: total_time_spent_minutes
+
+4. GET /api/v1/classes/{class_id}/analytics
+   ✓ Verify: Class-level analytics:
+     - average_progress (%)
+     - completion_rate (%)
+     - active_students_count
+     - quiz_performance: { average_score, pass_rate }
+     - engagement_metrics
+```
+
+**Expected Results**:
+- ✅ Instructor xem được progress từng student
+- ✅ Class analytics tổng hợp chính xác
+- ✅ Data real-time và accurate
+
+---
+
+### **NHÓM 7: QUIZ MANAGEMENT (INSTRUCTOR)** 📝
+
+#### **E2E-15: Instructor tạo quiz cho lesson**
+**Mục đích**: Test quiz creation và management
+
+**Các bước**:
+```
+1. POST /api/v1/auth/login (instructor)
+
+2. GET /api/v1/courses (own courses)
+   GET /api/v1/courses/{course_id}/modules
+   ✓ Save: lesson_id
+
+3. POST /api/v1/quizzes/lessons/{lesson_id}/quizzes
+   Body: {
+     "title": "Python Basics Quiz 01",
+     "description": "Test kiến thức về Python cơ bản",
+     "questions": [
+       {
+         "question_text": "Python là gì?",
+         "question_type": "multiple_choice",
+         "options": ["A", "B", "C", "D"],
+         "correct_answer": "A",
+         "points": 10,
+         "difficulty": "easy",
+         "skill_tag": "python-basics"
+       },
+       { ... } // 9 câu nữa
+     ],
+     "time_limit": 30,
+     "passing_score": 70,
+     "allow_retake": true
+   }
+   ✓ Verify: 201 Created
+   ✓ Save: quiz_id
+
+4. GET /api/v1/quizzes/{quiz_id}
+   ✓ Verify: Quiz detail đầy đủ
+   ✓ Verify: total_points = sum(questions[].points)
+   ✓ Verify: question_count = 10
+
+5. PATCH /api/v1/quizzes/{quiz_id}
+   Body: {
+     "title": "Python Basics Quiz 01 - Updated",
+     "passing_score": 75
+   }
+   ✓ Verify: 200 OK
+
+6. Students làm quiz (xem E2E-08)
+
+7. GET /api/v1/quizzes/{quiz_id}/analytics
+   ✓ Verify: Quiz analytics:
+     - total_attempts
+     - average_score
+     - pass_rate
+     - question_difficulty_stats[]
+     - common_mistakes[]
+```
+
+**Expected Results**:
+- ✅ Quiz được tạo và gắn vào lesson
+- ✅ Update quiz thành công
+- ✅ Analytics reflect student performance
+
+---
+
+#### **E2E-16: Instructor xem quiz attempts**
+**Mục đích**: Test review mechanism cho instructor
+
+**Các bước**:
+```
+1. Quiz đã có students attempts (từ E2E-15)
+
+2. GET /api/v1/quizzes/{quiz_id}/attempts
+   ✓ Verify: List all attempts
+   ✓ Verify: Mỗi attempt có:
+     - attempt_id, student_name, student_email
+     - score, passed, time_taken
+     - submitted_at
+
+3. GET /api/v1/quizzes/{quiz_id}/attempts/{attempt_id}
+   ✓ Verify: Detailed attempt:
+     - Student info
+     - Quiz info
+     - answers[] với từng câu:
+       - question_text
+       - selected_answer
+       - correct_answer
+       - is_correct
+       - points_earned
+     - total_score, passed
+```
+
+**Expected Results**:
+- ✅ Instructor xem được tất cả attempts
+- ✅ Chi tiết từng attempt đầy đủ
+- ✅ Có thể review answers của students
+
+---
+
+### **NHÓM 8: PERSONAL COURSES (AI GENERATED)** 🌟
+
+#### **E2E-17: Tạo khóa học cá nhân từ AI**
+**Mục đích**: Test AI course generation feature
+
+**Các bước**:
+```
+1. POST /api/v1/auth/login (student)
+
+2. POST /api/v1/personal-courses
+   Body: {
+     "topic_prompt": "Học Python từ cơ bản đến nâng cao với focus vào web development",
+     "difficulty": "intermediate",
+     "duration_weeks": 8,
+     "learning_goals": [
+       "Master Python syntax",
+       "Build web apps with Flask",
+       "Work with databases"
+     ]
+   }
+   ✓ Verify: 201 Created (có thể mất 10-30s - AI generating)
+   ✓ Save: personal_course_id
+
+3. GET /api/v1/personal-courses/{personal_course_id}
+   ✓ Verify: AI-generated course structure:
+     - title (AI sinh)
+     - description (AI sinh)
+     - modules[] với lessons[]
+     - Mỗi lesson có content (markdown)
+     - estimated_duration
+     - difficulty_level
+   ✓ Verify: created_by = student_id
+
+4. GET /api/v1/personal-courses
+   ✓ Verify: List personal courses
+   ✓ Verify: Course vừa tạo xuất hiện
+
+5. Student học personal course (tương tự E2E-07)
+   POST /api/v1/progress/lessons/{lesson_id}/complete
+   ✓ Verify: Progress tracking hoạt động
+
+6. GET /api/v1/progress/courses/{personal_course_id}
+   ✓ Verify: Progress updated
+
+7. PATCH /api/v1/personal-courses/{personal_course_id}
+   Body: {
+     "title": "My Custom Python Course",
+     "is_public": true
+   }
+   ✓ Verify: Update success
+```
+
+**Expected Results**:
+- ✅ AI sinh course structure hợp lý
+- ✅ Lessons có nội dung chất lượng
+- ✅ Progress tracking tương tự official courses
+- ✅ Student có thể customize
+
+---
+
+### **NHÓM 9: ADMIN MANAGEMENT** 👑
+
+#### **E2E-18: Admin quản lý users**
+**Mục đích**: Test full user management flow
+
+**Các bước**:
+```
+1. POST /api/v1/auth/login (admin)
+   ✓ Save: admin_token
+
+2. GET /api/v1/admin/users
+   ✓ Verify: List all users
+   ✓ Verify: Có pagination (skip, limit)
+   ✓ Verify: Filter by role, status
+
+3. GET /api/v1/admin/users?role=student&status=active&skip=0&limit=20
+   ✓ Verify: Filtered results
+   ✓ Save: student_id
+
+4. GET /api/v1/admin/users/{student_id}
+   ✓ Verify: User detail đầy đủ:
+     - Personal info
+     - Enrollment statistics
+     - Activity logs
+     - Created/updated timestamps
+
+5. POST /api/v1/admin/users/{student_id}/change-role
+   Body: { "new_role": "instructor" }
+   ✓ Verify: 200 OK
+   ✓ Verify: Role changed từ student → instructor
+
+6. GET /api/v1/admin/users/{student_id}
+   ✓ Verify: role = "instructor"
+
+7. POST /api/v1/admin/users/{student_id}/reset-password
+   Body: { "new_password": "NewPassword@123" }
+   ✓ Verify: 200 OK
+
+8. Test login với password mới
+   POST /api/v1/auth/login
+   Body: { email: student_email, password: "NewPassword@123" }
+   ✓ Verify: Login success
+
+9. DELETE /api/v1/admin/users/{user_id}
+   (Test với user không có dependencies)
+   ✓ Verify: 200 OK hoặc 400 nếu có dependencies
+
+10. GET /api/v1/admin/users/{user_id}
+    ✓ Verify: 404 Not Found
+```
+
+**Expected Results**:
+- ✅ Admin có full control users
+- ✅ Change role hoạt động
+- ✅ Reset password thành công
+- ✅ Delete check dependencies
+
+---
+
+#### **E2E-19: Admin quản lý courses**
+**Mục đích**: Test course management cho admin
+
+**Các bước**:
+```
+1. POST /api/v1/auth/login (admin)
+
+2. GET /api/v1/admin/courses
+   ✓ Verify: List all courses (official + personal)
+   ✓ Verify: Filter by category, status, instructor_id
+
+3. POST /api/v1/admin/courses
+   Body: {
+     "title": "Advanced Machine Learning",
+     "description": "...",
+     "category": "AI/ML",
+     "level": "advanced",
+     "instructor_id": "{instructor_id}"
+   }
+   ✓ Verify: 201 Created
+   ✓ Save: course_id
+
+4. GET /api/v1/admin/courses/{course_id}
+   ✓ Verify: Course detail
+
+5. PATCH /api/v1/admin/courses/{course_id}
+   Body: { "status": "published" }
+   ✓ Verify: Status updated
+
+6. GET /api/v1/admin/courses/{course_id}/impact
+   (Check impact trước khi xóa)
+   ✓ Verify: Impact analysis:
+     - enrollments_count
+     - active_classes_count
+     - students_affected[]
+
+7. DELETE /api/v1/admin/courses/{course_id}
+   (Nếu không có dependencies)
+   ✓ Verify: 200 OK hoặc 400 nếu có impact
+
+8. Nếu có dependencies:
+   ✓ Verify: Error message chi tiết về impact
+```
+
+**Expected Results**:
+- ✅ Admin create/update/delete courses
+- ✅ Impact check trước khi delete
+- ✅ Prevent delete khi có students enrolled
+
+---
+
+#### **E2E-20: Admin giám sát classes**
+**Mục đích**: Test monitoring capabilities
+
+**Các bước**:
+```
+1. POST /api/v1/auth/login (admin)
+
+2. GET /api/v1/admin/classes
+   ✓ Verify: Tất cả classes từ mọi instructors
+   ✓ Verify: Filter by instructor_id, course_id, status
+
+3. GET /api/v1/admin/classes?status=active&sort_by=student_count&order=desc
+   ✓ Verify: Sorted by student_count descending
+
+4. GET /api/v1/admin/classes/{class_id}
+   ✓ Verify: Chi tiết class với:
+     - Class info
+     - Instructor info
+     - Course info
+     - Students count, stats
+     - Average progress, completion rate
+
+5. GET /api/v1/admin/analytics/users-growth?period=90days&group_by=week
+   ✓ Verify: Growth data:
+     - growth_data[] by week
+     - Mỗi point: date, new_users, total_users
+     - summary: growth_rate, average_signups
+```
+
+**Expected Results**:
+- ✅ Admin xem được tất cả classes
+- ✅ Filter và sort hoạt động
+- ✅ Analytics cung cấp insights
+
+---
+
+### **NHÓM 10: DASHBOARD & ANALYTICS** 📊
+
+#### **E2E-21: Student dashboard**
+**Mục đích**: Test dashboard data aggregation
+
+**Các bước**:
+```
+1. POST /api/v1/auth/login (student)
+   Student đã có enrolled courses, progress
+
+2. GET /api/v1/dashboard/student
+   ✓ Verify: Dashboard data:
+     - enrolled_courses[] với progress
+     - progress_summary:
+       - total_courses_enrolled
+       - courses_in_progress
+       - courses_completed
+       - average_progress
+     - recent_activities[] (học lesson, làm quiz)
+     - learning_streak: study_streak_days
+     - recommendations[] (optional)
+
+3. Verify data accuracy
+   ✓ enrolled_courses.length khớp với GET /enrollments/my-courses
+   ✓ Progress data khớp với actual progress
+   ✓ Recent activities theo thời gian giảm dần
+
+4. GET /api/v1/dashboard/student/recommendations
+   ✓ Verify: Recommended courses dựa trên:
+     - Completed courses
+     - Assessment results (nếu có)
+     - Learning preferences
+```
+
+**Expected Results**:
+- ✅ Dashboard aggregate data chính xác
+- ✅ Recommendations personalized
+- ✅ Real-time data
+
+---
+
+#### **E2E-22: Instructor dashboard**
+**Mục đích**: Test instructor analytics
+
+**Các bước**:
+```
+1. POST /api/v1/auth/login (instructor)
+   Instructor có classes với students
+
+2. GET /api/v1/dashboard/instructor
+   ✓ Verify: Instructor dashboard:
+     - overview:
+       - total_classes
+       - total_students
+       - active_classes
+       - average_completion_rate
+     - recent_classes[] với student_count, activity
+     - student_activities[] (recent completions, quiz attempts)
+     - upcoming_deadlines[] (nếu có)
+
+3. GET /api/v1/analytics/instructor/classes?class_id={class_id}
+   ✓ Verify: Class-specific analytics:
+     - Student progress distribution
+     - Quiz performance trends
+     - Engagement metrics
+     - At-risk students[]
+
+4. GET /api/v1/analytics/instructor/progress-chart?time_range=week&class_id={id}
+   ✓ Verify: Time-series data:
+     - Daily/weekly progress data
+     - Chart-ready format
+```
+
+**Expected Results**:
+- ✅ Instructor overview accurate
+- ✅ Class analytics detailed
+- ✅ Identify at-risk students
+
+---
+
+#### **E2E-23: Admin dashboard**
+**Mục đích**: Test system-wide analytics
+
+**Các bước**:
+```
+1. POST /api/v1/auth/login (admin)
+
+2. GET /api/v1/admin/dashboard
+   ✓ Verify: System stats:
+     - system_stats:
+       - total_users (by role)
+       - total_courses
+       - total_classes
+       - total_enrollments
+     - growth_metrics:
+       - new_users_today, this_week, this_month
+       - active_users_today
+     - popular_courses[] (by enrollment_count)
+     - recent_activities[] (system-wide)
+
+3. GET /api/v1/admin/analytics/users-growth?period=90days&group_by=week
+   ✓ Verify: Growth chart data
+   ✓ Verify: Trend analysis
+
+4. Verify data consistency
+   ✓ total_users = sum(users by role)
+   ✓ Popular courses match enrollment data
+```
+
+**Expected Results**:
+- ✅ System-wide stats accurate
+- ✅ Growth trends visualizable
+- ✅ Real-time insights
+
+---
+
+### **NHÓM 11: SEARCH & RECOMMENDATION** 🔍
+
+#### **E2E-24: Search courses, users, classes**
+**Mục đích**: Test unified search functionality
+
+**Các bước**:
+```
+1. POST /api/v1/auth/login (student)
+
+2. GET /api/v1/search/courses?keyword=Python&category=Programming&level=beginner
+   ✓ Verify: Courses matching criteria
+   ✓ Verify: Relevance sorting
+   ✓ Verify: Pagination
+
+3. GET /api/v1/search/users?keyword=John&role=instructor
+   ✓ Verify: Instructors tên "John"
+   ✓ Verify: Role filter applied
+
+4. POST /api/v1/auth/login (instructor)
+   GET /api/v1/search/classes?keyword=Web&status=active
+   ✓ Verify: Classes matching keyword
+   ✓ Verify: Status filter
+
+5. Test advanced search
+   GET /api/v1/search/courses?keyword=Python&category=Programming&min_rating=4.5&sort_by=popularity
+   ✓ Verify: Multiple filters combined
+   ✓ Verify: Sorting applied
+
+6. Test fuzzy search
+   GET /api/v1/search/courses?keyword=Pythn (typo)
+   ✓ Verify: Still return Python courses (fuzzy match)
+```
+
+**Expected Results**:
+- ✅ Search cross multiple entities
+- ✅ Filters và sorting work
+- ✅ Fuzzy matching for typos
+- ✅ Fast response time
+
+---
+
+#### **E2E-25: Recommendation engine**
+**Mục đích**: Test personalized recommendations
+
+**Các bước**:
+```
+1. POST /api/v1/auth/login (student)
+   Student có history: completed courses, assessment
+
+2. GET /api/v1/recommendations/courses
+   ✓ Verify: Recommended courses:
+     - Based on completed_courses
+     - Based on assessment results (proficiency_level)
+     - Based on learning_preferences
+   ✓ Verify: Mỗi recommendation có:
+     - course_id, title, description
+     - relevance_score (0-100)
+     - reason (tại sao recommend)
+
+3. Test different scenarios:
+   CASE A: Student chưa học gì
+   ✓ Verify: Recommend beginner courses
+
+   CASE B: Student đã complete Python Basics
+   ✓ Verify: Recommend Python Intermediate
+
+   CASE C: Student assessment results: Advanced Python
+   ✓ Verify: Recommend advanced topics
+
+4. GET /api/v1/recommendations/from-assessment?session_id={id}
+   (Từ E2E-04)
+   ✓ Verify: Recommendations dựa trên assessment
+   ✓ Verify: Address knowledge_gaps
+
+5. Verify recommendation quality
+   ✓ Courses follow learning progression
+   ✓ Relevance scores reasonable
+   ✓ Reasons explain logic
+```
+
+**Expected Results**:
+- ✅ Recommendations personalized
+- ✅ Multiple factors considered
+- ✅ Learning path logical
+- ✅ Quality explanations
+
+---
+
+## 📈 **TỔNG KẾT LUỒNG E2E**
+
+### **Phân Loại Theo Độ Ưu Tiên**
+
+| **Độ Ưu Tiên** | **Luồng E2E** | **Lý Do** |
+|----------------|---------------|-----------|
+| 🔴 **Critical** | E2E-01, E2E-02, E2E-03 | Authentication - Nền tảng của hệ thống |
+| 🔴 **Critical** | E2E-04, E2E-05 | Assessment - Core feature AI |
+| 🔴 **Critical** | E2E-06, E2E-07, E2E-08 | Learning flow - Main user journey |
+| 🟡 **High** | E2E-09, E2E-10 | AI Chatbot - Key differentiator |
+| 🟡 **High** | E2E-11 | Practice - Learning enhancement |
+| 🟡 **High** | E2E-12, E2E-13, E2E-14 | Class management - B2B feature |
+| 🟡 **High** | E2E-15, E2E-16 | Quiz management - Assessment |
+| 🟢 **Medium** | E2E-17 | Personal courses - Advanced feature |
+| 🟢 **Medium** | E2E-18, E2E-19, E2E-20 | Admin - Management layer |
+| 🟢 **Medium** | E2E-21, E2E-22, E2E-23 | Dashboards - Analytics |
+| 🟢 **Medium** | E2E-24, E2E-25 | Search & Recommendations |
+
+### **Test Execution Strategy**
+
+**Phase 1: Foundation (Tuần 1)**
+- E2E-01 → E2E-03: Authentication flow
+- E2E-06 → E2E-08: Basic learning flow
+
+**Phase 2: Core Features (Tuần 2)**
+- E2E-04 → E2E-05: Assessment & AI
+- E2E-09 → E2E-11: AI features
+
+**Phase 3: Advanced Features (Tuần 3)**
+- E2E-12 → E2E-16: Class & Quiz management
+- E2E-17: Personal courses
+
+**Phase 4: Management & Analytics (Tuần 4)**
+- E2E-18 → E2E-23: Admin & Dashboards
+- E2E-24 → E2E-25: Search & Recommendations
+
+### **Success Metrics**
+
+- ✅ **Pass Rate**: ≥ 95% của test cases pass
+- ✅ **Response Time**: < 2s cho non-AI endpoints, < 10s cho AI endpoints
+- ✅ **Data Integrity**: 100% data consistency checks pass
+- ✅ **Error Handling**: All error cases return proper status codes và messages
+
+### **Tools & Automation**
+
+- **Manual Testing**: Swagger UI, Postman
+- **Automated Testing**: pytest với asyncio
+- **CI/CD**: GitHub Actions run tests on every PR
+- **Monitoring**: Track test execution times và failure rates
+
+---
+

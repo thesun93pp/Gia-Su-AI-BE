@@ -20,9 +20,9 @@ class ClassCreateRequest(BaseModel):
 class ClassCreateResponse(BaseModel):
     class_id: str = Field(..., description="UUID")
     name: str
-    course_id: str = Field(..., description="UUID")
     invite_code: str = Field(..., description="6-8 characters")
-    status: str = Field(..., description="preparing")
+    course_title: str
+    student_count: int = Field(..., description="Số học viên hiện tại")
     created_at: datetime
     message: str
 
@@ -52,6 +52,12 @@ class StudentInfo(BaseModel):
     joined_at: datetime
 
 
+class CourseInfo(BaseModel):
+    id: str = Field(..., description="UUID")
+    title: str
+    module_count: int
+
+
 class ClassStats(BaseModel):
     total_students: int
     lessons_completed: int
@@ -61,16 +67,16 @@ class ClassStats(BaseModel):
 class ClassDetailResponse(BaseModel):
     id: str = Field(..., description="UUID")
     name: str
-    course_id: str = Field(..., description="UUID")
-    course_title: str
-    invite_code: str
     description: str
-    status: str
+    course: CourseInfo
+    invite_code: str
+    max_students: int
+    student_count: int
     start_date: datetime
     end_date: datetime
-    max_students: int
-    students: List[StudentInfo]
-    stats: ClassStats
+    status: str
+    recent_students: List[StudentInfo]
+    class_stats: ClassStats
 
 
 class ClassUpdateRequest(BaseModel):

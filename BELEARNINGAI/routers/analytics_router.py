@@ -1,8 +1,8 @@
 """
 Analytics Router
 Định nghĩa routes cho analytics endpoints
-Section 2.7.2-2.7.3, 3.4.2-3.4.4, 4.4.2-4.4.4
-8 endpoints
+Section 2.7.2-2.7.3 (Student), 3.4.2-3.4.4 (Instructor)
+5 endpoints (Admin analytics đã chuyển sang admin_router)
 """
 
 from fastapi import APIRouter, Depends, status, Query
@@ -111,56 +111,3 @@ async def get_instructor_quiz_performance(
 ):
     """Section 3.4.4 - Instructor quiz performance"""
     return await handle_get_instructor_quiz_performance(current_user)
-
-
-# ============================================================================
-# ADMIN ANALYTICS (Section 4.4.2-4.4.4)
-# ============================================================================
-
-@router.get(
-    "/admin/users-growth",
-    response_model=AdminUsersGrowthResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Thống kê tăng trưởng người dùng",
-    description="Phân tích tăng trưởng người dùng theo thời gian với breakdown theo role"
-)
-async def get_users_growth_analytics(
-    time_range: str = Query("30d", regex="^(7d|30d|90d)$", description="Khoảng thời gian"),
-    role_filter: Optional[str] = Query(None, description="Lọc theo role cụ thể"),
-    current_user: dict = Depends(get_current_user)
-):
-    """Section 4.4.2 - Thống kê tăng trưởng người dùng (Admin)"""
-    from controllers.dashboard_controller import handle_get_users_growth_analytics
-    return await handle_get_users_growth_analytics(time_range, role_filter, current_user)
-
-
-@router.get(
-    "/admin/courses-analytics",
-    response_model=AdminCourseAnalyticsResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Phân tích khóa học chuyên sâu",
-    description="Analytics khóa học: top courses, completion rates, creation trends"
-)
-async def get_course_analytics(
-    time_range: str = Query("30d", regex="^(7d|30d|90d)$", description="Khoảng thời gian"),
-    category_filter: Optional[str] = Query(None, description="Lọc theo danh mục"),
-    current_user: dict = Depends(get_current_user)
-):
-    """Section 4.4.3 - Phân tích khóa học (Admin)"""
-    from controllers.dashboard_controller import handle_get_course_analytics
-    return await handle_get_course_analytics(time_range, category_filter, current_user)
-
-
-@router.get(
-    "/admin/system-health",
-    response_model=AdminSystemHealthResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Giám sát sức khỏe hệ thống",
-    description="Metrics hệ thống: database, performance, alerts, utilization"
-)
-async def get_system_health(
-    current_user: dict = Depends(get_current_user)
-):
-    """Section 4.4.4 - Giám sát sức khỏe hệ thống (Admin)"""
-    from controllers.dashboard_controller import handle_get_system_health
-    return await handle_get_system_health(current_user)
