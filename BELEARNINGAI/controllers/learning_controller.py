@@ -441,7 +441,19 @@ async def handle_generate_module_assessment(
             detail="Không thể tạo bài kiểm tra lúc này"
         )
     
-    # Create Quiz document
+    # CRITICAL FIX: Generate question_id for each question BEFORE saving to DB
+    # This ensures question_id in response matches question_id in DB for quiz submission
+    questions_with_ids = []
+    for q in quiz_data["questions"]:
+        # Generate unique question_id
+        question_id = str(generate_uuid())
+        
+        # Add question_id to question data
+        q_with_id = q.copy()
+        q_with_id["question_id"] = question_id
+        questions_with_ids.append(q_with_id)
+    
+    # Create Quiz document with questions that have question_id
     quiz_id = generate_uuid()
     quiz = Quiz(
         id=quiz_id,
@@ -451,9 +463,9 @@ async def handle_generate_module_assessment(
         title=f"Assessment: {module.title}",
         description=f"Bài kiểm tra {request.assessment_type} cho module {module.title}",
         quiz_type=request.assessment_type,  # review|practice|final_check
-        questions=quiz_data["questions"],
+        questions=questions_with_ids,  # ← Use questions with question_id
         total_points=quiz_data["total_points"],
-        question_count=len(quiz_data["questions"]),
+        question_count=len(questions_with_ids),
         mandatory_question_count=quiz_data.get("mandatory_count", 0),
         passing_score=70.0,  # 70% pass threshold
         time_limit_minutes=request.time_limit_minutes or 15,
@@ -472,10 +484,11 @@ async def handle_generate_module_assessment(
     pass_threshold = int(quiz.passing_score) if quiz.passing_score else 70
     
     # Prepare questions array matching API_SCHEMA format
+    # CRITICAL: Use the SAME question_id from DB
     questions_response = []
-    for q in quiz_data["questions"]:
+    for q in questions_with_ids:
         question_obj = {
-            "question_id": str(generate_uuid()),
+            "question_id": q["question_id"],  # ← Use question_id from DB, not generate new!
             "order": q.get("order", 0),
             "question_text": q.get("question_text", q.get("question", "")),
             "question_type": q.get("type", "multiple_choice"),

@@ -473,9 +473,11 @@ class Quiz(Document):
     id: str = Field(default_factory=generate_uuid, alias="_id")
     lesson_id: str = Field(..., description="UUID lesson chứa quiz này")
     course_id: str = Field(..., description="UUID khóa học (denormalized)")
+    module_id: Optional[str] = Field(None, description="UUID module (for module-level assessments)")
     
     title: str = Field(..., description="Tên quiz")
     description: str = Field(..., description="Mô tả quiz")
+    quiz_type: Optional[str] = Field(None, description="review|practice|final_check (for module assessments)")
     
     # Cấu hình - theo QuizDetailResponse và QuizCreateRequest
     time_limit_minutes: Optional[int] = Field(None, description="Thời gian làm bài (phút), null = không giới hạn")
@@ -513,11 +515,14 @@ class Quiz(Document):
         indexes = [
             "lesson_id",
             "course_id",
+            "module_id",  # For module-level assessments
             "created_by",
             "is_draft",
+            "quiz_type",  # For filtering by assessment type
             "created_at",
             [("course_id", 1), ("is_draft", 1)],
-            [("lesson_id", 1), ("is_draft", 1)]
+            [("lesson_id", 1), ("is_draft", 1)],
+            [("module_id", 1), ("quiz_type", 1)]  # For module assessments
         ]
 
 

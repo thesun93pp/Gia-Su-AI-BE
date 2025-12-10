@@ -50,6 +50,12 @@ class GeneratedLesson(BaseModel):
     content_outline: str = Field(..., description="Outline nội dung chính")
 
 
+class LearningOutcome(BaseModel):
+    """Learning outcome structure - khớp với API_SCHEMA"""
+    description: str = Field(..., description="Mục tiêu cụ thể, đo lường được")
+    skill_tag: str = Field(..., description="Kỹ năng liên quan")
+
+
 class GeneratedModule(BaseModel):
     """Module được AI sinh ra"""
     id: str = Field(..., description="UUID của module")
@@ -57,7 +63,7 @@ class GeneratedModule(BaseModel):
     description: str = Field(..., description="Mô tả module")
     order: int = Field(..., description="Thứ tự module")
     difficulty: str = Field("Basic", description="Độ khó (Basic, Intermediate, Advanced)")
-    learning_outcomes: List[str] = Field(
+    learning_outcomes: List[LearningOutcome] = Field(
         default_factory=list,
         description="Các mục tiêu học tập"
     )

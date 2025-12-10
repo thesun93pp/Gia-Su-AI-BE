@@ -159,11 +159,9 @@ async def seed_users() -> Dict[str, List[str]]:
 
 async def seed_courses(user_ids: Dict[str, List[str]]) -> Dict[str, str]:
     """
-    Tạo 1 khóa học siêu chi tiết với đầy đủ cấu trúc hybrid:
-    - Course document với embedded modules/lessons
-    - Separate Module documents 
-    - Separate Lesson documents
-    - Đầy đủ metadata, resources, learning outcomes
+    Tạo 6 khóa học admin published với đầy đủ cấu trúc:
+    - 1 khóa Python siêu chi tiết (như cũ)
+    - 5 khóa khác với 2 modules mỗi khóa
     """
     print("\n--- Bắt đầu tạo KHÓA HỌC CHI TIẾT ---")
     
@@ -175,7 +173,9 @@ async def seed_courses(user_ids: Dict[str, List[str]]) -> Dict[str, str]:
     instructor_id = instructor_ids[0] if instructor_ids else None
     instructor_name = "Nguyễn Văn Minh"
     
-    # Tạo 1 khóa học siêu chi tiết
+    course_ids_map = {}
+    
+    # ========== COURSE 1: Python (Siêu chi tiết - giữ nguyên) ==========
     course_id = str(uuid.uuid4())
     course = Course(
         id=course_id,
@@ -198,7 +198,7 @@ Phù hợp cho: Người mới bắt đầu lập trình, sinh viên IT, develop
         category="Programming",
         level="Beginner",
         thumbnail_url="https://images.unsplash.com/photo-1526379095098-d400fd0bf935?w=800&h=450",
-        preview_video_url="https://www.youtube.com/watch?v=rfscVS0vtbw",  # Python tutorial video thực tế
+        preview_video_url="https://www.youtube.com/watch?v=rfscVS0vtbw",
         language="vi",
         status="published",
         owner_id=admin_id,
@@ -239,8 +239,8 @@ Phù hợp cho: Người mới bắt đầu lập trình, sinh viên IT, develop
             "Không cần kinh nghiệm lập trình trước đó",
             "Máy tính cài đặt Python 3.8+ và VS Code"
         ],
-        modules=[],  # Sẽ được fill sau
-        total_duration_minutes=0,  # Sẽ được tính sau
+        modules=[],
+        total_duration_minutes=0,
         total_modules=0,
         total_lessons=0,
         enrollment_count=0,
@@ -248,11 +248,109 @@ Phù hợp cho: Người mới bắt đầu lập trình, sinh viên IT, develop
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow()
     )
-    
     await course.insert()
-    print(f"✅ Đã tạo Course: {course.title}")
+    course_ids_map[course.title] = course_id
+    print(f"✅ Đã tạo Course 1: {course.title}")
     
-    return {course.title: course_id}
+    # ========== COURSE 2-6: Các khóa học khác (Published) ==========
+    additional_courses = [
+        {
+            "title": "JavaScript Modern - ES6+ và React",
+            "description": "Học JavaScript hiện đại với ES6+, async/await, và React framework. Xây dựng ứng dụng web động với React Hooks, Context API, và Redux.",
+            "category": "Programming",
+            "level": "Intermediate",
+            "thumbnail_url": "https://images.unsplash.com/photo-1579468118864-1b9ea3c0db4a?w=800&h=450",
+            "skill_tags": ["javascript-es6", "react-basics", "react-hooks", "redux"]
+        },
+        {
+            "title": "Data Science với Python và Pandas",
+            "description": "Phân tích dữ liệu chuyên sâu với Python, Pandas, NumPy và Matplotlib. Học cách làm sạch, xử lý và visualize dữ liệu thực tế.",
+            "category": "Data Science",
+            "level": "Intermediate",
+            "thumbnail_url": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&h=450",
+            "skill_tags": ["pandas-dataframe", "numpy-arrays", "data-visualization", "data-cleaning"]
+        },
+        {
+            "title": "Machine Learning Cơ bản",
+            "description": "Khóa học Machine Learning từ cơ bản đến nâng cao với scikit-learn. Học các thuật toán: Linear Regression, Decision Trees, Random Forest, Neural Networks.",
+            "category": "Data Science",
+            "level": "Advanced",
+            "thumbnail_url": "https://images.unsplash.com/photo-1555949963-aa79dcee981c?w=800&h=450",
+            "skill_tags": ["ml-regression", "ml-classification", "scikit-learn", "neural-networks"]
+        },
+        {
+            "title": "Web Development Full-stack với MERN",
+            "description": "Xây dựng ứng dụng web full-stack với MongoDB, Express, React và Node.js. Từ database design đến deployment trên cloud.",
+            "category": "Programming",
+            "level": "Advanced",
+            "thumbnail_url": "https://images.unsplash.com/photo-1627398242454-45a1465c2479?w=800&h=450",
+            "skill_tags": ["mongodb", "express-js", "react", "nodejs"]
+        },
+        {
+            "title": "SQL và Database Design",
+            "description": "Học SQL từ cơ bản đến nâng cao: queries, joins, subqueries, indexes. Thiết kế database với normalization và optimization.",
+            "category": "Programming",
+            "level": "Beginner",
+            "thumbnail_url": "https://images.unsplash.com/photo-1544383835-bda2bc66a55d?w=800&h=450",
+            "skill_tags": ["sql-basics", "database-design", "sql-joins", "query-optimization"]
+        },
+        {
+            "title": "Business Analytics và Excel nâng cao",
+            "description": "Phân tích kinh doanh với Excel: Pivot Tables, VLOOKUP, Power Query, Dashboard. Học cách ra quyết định dựa trên dữ liệu.",
+            "category": "Business",
+            "level": "Beginner",
+            "thumbnail_url": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&h=450",
+            "skill_tags": ["excel-pivot", "excel-formulas", "business-analytics", "data-dashboard"]
+        }
+    ]
+    
+    for idx, course_data in enumerate(additional_courses, start=2):
+        course_id = str(uuid.uuid4())
+        
+        # Tạo learning outcomes từ skill_tags
+        learning_outcomes = [
+            {
+                "id": str(uuid.uuid4()),
+                "description": f"Nắm vững {tag.replace('-', ' ')}",
+                "skill_tag": tag
+            }
+            for tag in course_data["skill_tags"]
+        ]
+        
+        course = Course(
+            id=course_id,
+            title=course_data["title"],
+            description=course_data["description"],
+            category=course_data["category"],
+            level=course_data["level"],
+            thumbnail_url=course_data["thumbnail_url"],
+            preview_video_url="https://www.youtube.com/watch?v=rfscVS0vtbw",
+            language="vi",
+            status="published",  # ✅ Tất cả đều published
+            owner_id=admin_id,
+            owner_type="admin",
+            instructor_id=instructor_id,
+            instructor_name=instructor_name,
+            instructor_avatar="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150",
+            instructor_bio="Giảng viên chuyên nghiệp với nhiều năm kinh nghiệm giảng dạy và thực chiến.",
+            learning_outcomes=learning_outcomes,
+            prerequisites=["Kiến thức cơ bản về máy tính", "Đam mê học hỏi"],
+            modules=[],  # Sẽ được fill sau nếu cần
+            total_duration_minutes=0,
+            total_modules=0,
+            total_lessons=0,
+            enrollment_count=0,
+            avg_rating=4.5 + (idx * 0.1),  # 4.6, 4.7, 4.8...
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        
+        await course.insert()
+        course_ids_map[course.title] = course_id
+        print(f"✅ Đã tạo Course {idx}: {course.title}")
+    
+    print(f"\n🎉 Đã tạo tổng cộng {len(course_ids_map)} khóa học admin (tất cả published)")
+    return course_ids_map
 
 async def seed_modules_and_lessons(course_ids: Dict[str, str]) -> Dict[str, List[str]]:
     """
@@ -1078,43 +1176,86 @@ async def seed_conversations(user_ids: Dict[str, List[str]], course_ids: Dict[st
 async def seed_classes(user_ids: Dict[str, List[str]], course_ids: Dict[str, str]):
     """
     Tạo dữ liệu mẫu cho các lớp học (Class).
-    - Mỗi giảng viên tạo 1 lớp học cho khóa Python.
+    - Mỗi giảng viên tạo 2-3 lớp học cho các khóa học khác nhau
+    - Mỗi lớp có 5-15 học viên
+    - Status: preparing, active, hoặc completed
     """
     print("\n--- Bắt đầu tạo dữ liệu cho Classes ---")
     
     classes_to_create = []
     instructor_ids = user_ids["instructor"]
     student_ids = user_ids["student"]
-    # Chỉ có 1 khóa học Python
-    python_course_id = course_ids["Lập trình Python từ Cơ bản đến Nâng cao"]
-
+    
+    # Lấy danh sách courses (chỉ admin courses, không lấy personal)
+    available_courses = list(course_ids.items())
+    
+    if not available_courses:
+        print("⚠️ Không có khóa học nào để tạo lớp.")
+        return
+    
+    # Mỗi instructor tạo 2-3 classes
     for instructor_id in instructor_ids:
-        # Mỗi instructor tạo 1 class cho Python
-        course_id = python_course_id
-        course_info = await Course.get(course_id)
-        start_date = datetime.now(timezone.utc) + timedelta(days=random.randint(1, 15))
+        num_classes = random.randint(2, 3)
         
-        # Đảm bảo số học viên được chọn không vượt quá tổng số học viên có sẵn
-        num_students = min(len(student_ids), random.randint(5, 15))
+        # Random chọn courses cho instructor này
+        selected_courses = random.sample(available_courses, k=min(len(available_courses), num_classes))
         
-        class_item = Class(
-            name=f"Lớp {course_info.title} - K{random.randint(1, 5)}",
-            description=f"Lớp học chuyên sâu về {course_info.title} do giảng viên hướng dẫn.",
-            course_id=course_id,
-            instructor_id=instructor_id,
-            max_students=random.randint(20, 50),
-            start_date=start_date,
-            end_date=start_date + timedelta(days=random.randint(30, 60)),
-            status=random.choice(["preparing", "active"]),
-            student_ids=random.sample(student_ids, k=num_students)
-        )
-        classes_to_create.append(class_item)
-        print(f"    🏫 Đã chuẩn bị Lớp học: {class_item.name}")
-
+        for course_title, course_id in selected_courses:
+            course_info = await Course.get(course_id)
+            if not course_info:
+                continue
+            
+            # Random start date (một số đã bắt đầu, một số sắp bắt đầu)
+            days_offset = random.randint(-30, 15)  # -30 = đã bắt đầu 30 ngày trước
+            start_date = datetime.now(timezone.utc) + timedelta(days=days_offset)
+            duration_days = random.randint(30, 90)
+            end_date = start_date + timedelta(days=duration_days)
+            
+            # Determine status based on dates
+            now = datetime.now(timezone.utc)
+            if start_date > now:
+                status = "preparing"
+            elif end_date < now:
+                status = "completed"
+            else:
+                status = "active"
+            
+            # Random số học viên (5-15)
+            num_students = min(len(student_ids), random.randint(5, 15))
+            selected_students = random.sample(student_ids, k=num_students)
+            
+            # Tạo tên lớp đẹp
+            class_number = random.randint(1, 20)
+            semester = random.choice(["K1", "K2", "K3", "K4", "K5"])
+            
+            class_item = Class(
+                name=f"Lớp {course_info.title[:30]}... - {semester}.{class_number}",
+                description=f"Lớp học chuyên sâu về {course_info.title}. Giảng viên sẽ hướng dẫn chi tiết từng bài học, hỗ trợ 1-1 và review bài tập. Lớp học online qua Zoom với lịch cố định.",
+                course_id=course_id,
+                instructor_id=instructor_id,
+                max_students=random.randint(20, 50),
+                start_date=start_date,
+                end_date=end_date,
+                status=status,
+                student_ids=selected_students,
+                created_at=start_date - timedelta(days=random.randint(7, 30)),  # Tạo trước khi bắt đầu
+                updated_at=datetime.now(timezone.utc)
+            )
+            classes_to_create.append(class_item)
+            print(f"    🏫 Đã chuẩn bị Lớp: {class_item.name} ({status}, {num_students} students)")
+    
     if classes_to_create:
         await Class.insert_many(classes_to_create)
         
-    print(f"✅ Đã tạo thành công {len(classes_to_create)} lớp học.")
+    # Thống kê
+    active_count = sum(1 for c in classes_to_create if c.status == "active")
+    preparing_count = sum(1 for c in classes_to_create if c.status == "preparing")
+    completed_count = sum(1 for c in classes_to_create if c.status == "completed")
+    
+    print(f"✅ Đã tạo thành công {len(classes_to_create)} lớp học:")
+    print(f"   - Active: {active_count}")
+    print(f"   - Preparing: {preparing_count}")
+    print(f"   - Completed: {completed_count}")
 
 async def seed_recommendations(user_ids: Dict[str, List[str]]):
     """
@@ -1182,8 +1323,8 @@ async def seed_personal_courses(user_ids: Dict[str, List[str]]) -> List[str]:
         print("⚠️ Không có student để tạo personal courses.")
         return []
     
-    # Lấy 3-5 students ngẫu nhiên để tạo khóa học cá nhân
-    selected_students = random.sample(student_ids, k=min(len(student_ids), random.randint(3, 5)))
+    # Lấy 2-3 students ngẫu nhiên để tạo khóa học cá nhân (giảm từ 3-5)
+    selected_students = random.sample(student_ids, k=min(len(student_ids), random.randint(2, 3)))
     
     personal_course_templates = [
         {
@@ -1281,7 +1422,7 @@ async def seed_personal_courses(user_ids: Dict[str, List[str]]) -> List[str]:
             level=template["level"],
             thumbnail_url=f"https://images.unsplash.com/photo-{random.randint(1500000000000, 1600000000000)}?w=800&h=450",
             language="vi",
-            status=random.choice(["draft", "published"]),
+            status=random.choices(["published", "draft"], weights=[80, 20])[0],  # 80% published, 20% draft
             owner_id=student_id,
             owner_type="student",  # ✅ Student là owner
             instructor_id=None,  # Personal course không có instructor

@@ -385,17 +385,34 @@ async def list_users_admin(
     else:
         query = User.find()
     
-    # Sort
+    # Sort - Beanie syntax: +(field) for asc, -(field) for desc
     if sort_order == "desc":
-        query = query.sort(f"-{sort_by}")
+        query = query.sort(-getattr(User, sort_by))
     else:
-        query = query.sort(f"+{sort_by}")
+        query = query.sort(+getattr(User, sort_by))
     
     # Count total trước khi skip/limit
     total = await query.count()
     
-    # Pagination
-    users = await query.skip(skip).limit(limit).to_list()
+    # Pagination - wrap trong try-catch để handle invalid data
+    try:
+        users = await query.skip(skip).limit(limit).to_list()
+    except Exception as e:
+        # Nếu có lỗi validation khi load users, query từng user riêng lẻ
+        import logging
+        logging.warning(f"Validation error when loading users in batch: {str(e)}")
+        logging.warning("Attempting to load users individually and skip invalid ones...")
+        
+        # Query lại nhưng load từng user một
+        users = []
+        cursor = query.skip(skip).limit(limit)
+        async for user_doc in cursor:
+            try:
+                # Beanie sẽ validate từng user
+                users.append(user_doc)
+            except Exception as validation_error:
+                logging.warning(f"Skipping invalid user: {validation_error}")
+                continue
     
     # Search filter sau query (nếu có)
     if search:
@@ -410,38 +427,58 @@ async def list_users_admin(
     user_items = []
     
     for user in users:
-        item = {
-            "user_id": str(user.id),
-            "full_name": user.full_name,
-            "email": user.email,
-            "avatar": user.avatar_url,
-            "role": user.role,
-            "status": user.status,
-            "created_at": user.created_at
-        }
-        
-        # Add role-specific stats
-        if user.role == "student":
-            enrollment_count = await Enrollment.find(
-                Enrollment.user_id == str(user.id)
-            ).count()
-            item["enrollment_count"] = enrollment_count
-        elif user.role == "instructor":
-            class_count = await Class.find(
-                Class.instructor_id == str(user.id)
-            ).count()
-            item["class_count"] = class_count
-        
-        user_items.append(item)
+        try:
+            item = {
+                "user_id": str(user.id),
+                "full_name": user.full_name,
+                "email": user.email,
+                "avatar": user.avatar_url,
+                "role": user.role,
+                "status": user.status,
+                "created_at": user.created_at,
+                "last_login_at": user.last_login_at
+            }
+            
+            # Add role-specific stats (match schema field names)
+            if user.role == "student":
+                enrollment_count = await Enrollment.find(
+                    Enrollment.user_id == str(user.id)
+                ).count()
+                item["courses_enrolled"] = enrollment_count
+            elif user.role == "instructor":
+                class_count = await Class.find(
+                    Class.instructor_id == str(user.id)
+                ).count()
+                item["classes_created"] = class_count
+            
+            user_items.append(item)
+        except Exception as e:
+            # Skip users with validation errors (e.g., invalid email from old data)
+            import logging
+            logging.warning(f"Skipping user {user.id} due to validation error: {str(e)}")
+            continue
     
-    has_next = (skip + limit) < total
+    # Calculate summary stats
+    from datetime import datetime, timedelta
+    total_users_count = await User.count()
+    active_users_count = await User.find(User.status == "active").count()
+    
+    # New users this month
+    first_day_of_month = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    new_users_this_month = await User.find(
+        User.created_at >= first_day_of_month
+    ).count()
     
     return {
         "data": user_items,
         "total": total,
         "skip": skip,
         "limit": limit,
-        "has_next": has_next
+        "summary": {
+            "total_users": total_users_count,
+            "active_users": active_users_count,
+            "new_users_this_month": new_users_this_month
+        }
     }
 
 
@@ -514,15 +551,21 @@ async def get_user_detail_admin(user_id: str) -> dict:
             "user_id": str(user.id),
             "full_name": user.full_name,
             "email": user.email,
-            "avatar": user.avatar_url,
-            "bio": user.bio,
             "role": user.role,
             "status": user.status,
             "created_at": user.created_at,
-            "updated_at": user.updated_at,
             "last_login_at": user.last_login_at if user.last_login_at else None,
-            "statistics": statistics,
-            "current_enrollments": current_enrollments
+            "profile": {
+                "phone": user.contact_info if hasattr(user, 'contact_info') else None,
+                "bio": user.bio,
+                "avatar_url": user.avatar_url
+            },
+            "activity_summary": {
+                "courses_enrolled": enrolled_count,
+                "classes_created": 0,
+                "total_study_hours": 0,  # TODO: calculate from Progress
+                "login_streak_days": 0  # TODO: calculate from login history
+            }
         }
     
     elif user.role == "instructor":
@@ -545,42 +588,25 @@ async def get_user_detail_admin(user_id: str) -> dict:
             Quiz.created_by == user_id
         ).count()
         
-        statistics = {
-            "classes_teaching": len(classes),
-            "students_taught": total_students,
-            "quizzes_created": quizzes_created
-        }
-        
-        # Get teaching classes
-        teaching_classes = []
-        for cls in classes:
-            course = await Course.get(cls.course_id) if cls.course_id else None
-            student_count = await Enrollment.find(
-                Enrollment.course_id == cls.course_id,
-                Enrollment.status == "active"
-            ).count()
-            
-            teaching_classes.append({
-                "class_id": str(cls.id),
-                "class_name": cls.name,
-                "course_title": course.title if course else "N/A",
-                "student_count": student_count,
-                "created_at": cls.created_at
-            })
-        
         return {
             "user_id": str(user.id),
             "full_name": user.full_name,
             "email": user.email,
-            "avatar": user.avatar_url,
-            "bio": user.bio,
             "role": user.role,
             "status": user.status,
             "created_at": user.created_at,
-            "updated_at": user.updated_at,
             "last_login_at": user.last_login_at if user.last_login_at else None,
-            "statistics": statistics,
-            "teaching_classes": teaching_classes
+            "profile": {
+                "phone": user.contact_info if hasattr(user, 'contact_info') else None,
+                "bio": user.bio,
+                "avatar_url": user.avatar_url
+            },
+            "activity_summary": {
+                "courses_enrolled": 0,
+                "classes_created": len(classes),
+                "total_study_hours": 0,
+                "login_streak_days": 0
+            }
         }
     
     else:
@@ -589,14 +615,21 @@ async def get_user_detail_admin(user_id: str) -> dict:
             "user_id": str(user.id),
             "full_name": user.full_name,
             "email": user.email,
-            "avatar": user.avatar_url,
-            "bio": user.bio,
             "role": user.role,
             "status": user.status,
             "created_at": user.created_at,
-            "updated_at": user.updated_at,
             "last_login_at": user.last_login_at if user.last_login_at else None,
-            "statistics": {}
+            "profile": {
+                "phone": user.contact_info if hasattr(user, 'contact_info') else None,
+                "bio": user.bio,
+                "avatar_url": user.avatar_url
+            },
+            "activity_summary": {
+                "courses_enrolled": 0,
+                "classes_created": 0,
+                "total_study_hours": 0,
+                "login_streak_days": 0
+            }
         }
 
 
@@ -604,23 +637,23 @@ async def create_user_admin(
     full_name: str,
     email: str,
     role: str,
-    password: Optional[str] = None,
+    password: str,  # Required for all roles (not Optional)
     bio: Optional[str] = None,
     avatar: Optional[str] = None
 ) -> dict:
     """
     4.1.3: Tạo tài khoản người dùng (Admin)
     
-    Business logic:
-    - Admin tạo trực tiếp user
-    - Nếu Student: status=pending (admin manually activate later)
-    - Nếu Instructor/Admin: nhập password (status=active)
+    Business logic (theo API_SCHEMA.md Section 9.3):
+    - Admin tạo trực tiếp user với password
+    - Password là BẮT BUỘC cho tất cả roles
+    - Status=active cho tất cả roles (có thể login ngay)
     
     Args:
         full_name: Tên đầy đủ
         email: Email (unique)
         role: student|instructor|admin
-        password: Required cho instructor/admin
+        password: Password (REQUIRED for all roles)
         bio: Bio (optional)
         avatar: Avatar URL (optional)
         
@@ -628,69 +661,37 @@ async def create_user_admin(
         Dict với user_id, status, message
         
     Raises:
-        Exception: Nếu email đã tồn tại hoặc validation failed
+        Exception: Nếu email đã tồn tại
     """
     # Check email exists
     existing = await get_user_by_email(email)
     if existing:
         raise Exception(f"Email {email} đã được sử dụng")
     
-    # Validate password cho instructor/admin
-    if role in ["instructor", "admin"] and not password:
-        raise Exception(f"Password là bắt buộc khi tạo tài khoản {role}")
+    # Hash password (required for all roles)
+    hashed_pwd = hash_password(password)
     
-    # Create user
-    if role == "student":
-        # Student: status=pending, admin will manually activate
-        import secrets
-        temp_password = secrets.token_urlsafe(12)
-        hashed_pwd = hash_password(temp_password)
-        
-        user = User(
-            full_name=full_name,
-            email=email,
-            hashed_password=hashed_pwd,
-            role=role,
-            status="pending",  # Admin manually activate later
-            bio=bio,
-            avatar_url=avatar
-        )
-        await user.insert()
-        
-        return {
-            "user_id": str(user.id),
-            "full_name": user.full_name,
-            "email": user.email,
-            "role": user.role,
-            "status": user.status,
-            "created_at": user.created_at,
-            "message": "Tài khoản student đã được tạo với status pending. Admin cần manually activate."
-        }
+    # Create user with status=active for all roles
+    user = User(
+        full_name=full_name,
+        email=email,
+        hashed_password=hashed_pwd,
+        role=role,
+        status="active",  # Active for all roles
+        bio=bio,
+        avatar_url=avatar
+    )
+    await user.insert()
     
-    else:
-        # Instructor/Admin: status=active
-        hashed_pwd = hash_password(password)
-        
-        user = User(
-            full_name=full_name,
-            email=email,
-            hashed_password=hashed_pwd,
-            role=role,
-            status="active",
-            bio=bio,
-            avatar_url=avatar
-        )
-        await user.insert()
-        
-        return {
-            "user_id": str(user.id),
-            "full_name": user.full_name,
-            "email": user.email,
-            "role": user.role,
-            "status": user.status,
-            "created_at": user.created_at,
-            "message": f"Tài khoản {role} đã được tạo thành công."
-        }
+    return {
+        "user_id": str(user.id),
+        "full_name": user.full_name,
+        "email": user.email,
+        "role": user.role,
+        "status": user.status,
+        "created_at": user.created_at,
+        "message": f"Tài khoản {role} đã được tạo thành công."
+    }
 
 
 async def update_user_admin(

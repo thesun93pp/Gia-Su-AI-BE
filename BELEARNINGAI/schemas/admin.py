@@ -89,7 +89,7 @@ class AdminCreateUserRequest(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=100)
     email: str = Field(..., description="Unique email")
     role: str = Field(..., description="student|instructor|admin")
-    password: Optional[str] = Field(None, min_length=8, description="Required for instructor/admin")
+    password: str = Field(..., min_length=8, description="Password required for all roles")
     bio: Optional[str] = Field(None, max_length=500)
     avatar: Optional[str] = None
 

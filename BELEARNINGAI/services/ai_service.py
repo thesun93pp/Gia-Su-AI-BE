@@ -798,52 +798,99 @@ Nhiệm vụ: Tạo cấu trúc khóa học hoàn chỉnh dựa trên yêu cầu
 Cấp độ: {difficulty}
 Sở thích người dùng: {', '.join(user_preferences) if user_preferences else 'Không có'}
 
-Trả về JSON với cấu trúc:
+Trả về JSON với cấu trúc (CHỈ JSON THUẦN TÚY, KHÔNG CÓ TEXT KHÁC):
 {{
-    "title": "Tên khóa học",
-    "description": "Mô tả chi tiết",
-    "category": "Programming|Data Science|Business|...",
+    "title": "Tên khóa học ngắn gọn",
+    "description": "Mô tả ngắn (max 200 chars)",
+    "category": "Programming|Data Science|Business",
     "level": "{difficulty}",
     "estimated_duration": 30,
     "modules": [
         {{
             "title": "Tên module",
-            "description": "Mô tả module",
+            "description": "Mô tả ngắn",
             "order": 1,
+            "difficulty": "Basic|Intermediate|Advanced",
+            "estimated_hours": 2,
+            "learning_outcomes": [
+                {{
+                    "description": "Mục tiêu ngắn gọn",
+                    "skill_tag": "tag-kỹ-năng"
+                }}
+            ],
             "lessons": [
                 {{
-                    "title": "Tên bài học",
-                    "description": "Mô tả bài học",
-                    "content": "Nội dung chi tiết",
+                    "title": "Tên bài",
+                    "description": "Mô tả ngắn",
+                    "content": "Nội dung ngắn gọn",
                     "duration_minutes": 15,
                     "order": 1
                 }}
             ]
         }}
     ]
-}}"""
+}}
 
-        user_prompt = f"Yêu cầu khóa học: {prompt}"
+LƯU Ý:
+- CHỈ trả về JSON, KHÔNG có markdown hay text thừa
+- Mô tả ngắn gọn, tránh quá dài
+- Mỗi module 2-3 learning outcomes
+- Mỗi module 2-3 lessons
+- Max 3-4 modules
+"""
+
+        user_prompt = f"Tạo khóa học: {prompt[:200]}"  # Giới hạn prompt
         
         # Generate course structure
+        print(f"🤖 Calling Gemini API for course generation...", flush=True)
         response = model.generate_content(
             [system_prompt, user_prompt],
             generation_config=genai.types.GenerationConfig(
                 temperature=0.7,
-                max_output_tokens=4000
+                max_output_tokens=8000  # Tăng lên 8000
             )
         )
         
+        print(f"✅ Gemini API responded", flush=True)
+        
         # Parse response
         response_text = response.text.strip()
+        print(f"📄 Response length: {len(response_text)} characters", flush=True)
         
-        # Extract JSON from markdown code blocks if present
+        # Extract JSON - IMPROVED LOGIC
+        json_str = None
+        
+        # Method 1: Check for ```json specifically
         if "```json" in response_text:
-            response_text = response_text.split("```json")[1].split("```")[0].strip()
-        elif "```" in response_text:
-            response_text = response_text.split("```")[1].split("```")[0].strip()
+            print(f"📋 Found ```json block", flush=True)
+            json_start = response_text.find("```json") + 7
+            json_end = response_text.find("```", json_start)
+            if json_end > json_start:
+                json_str = response_text[json_start:json_end].strip()
+                print(f"📋 Method 1 extracted {len(json_str)} chars", flush=True)
+            else:
+                print(f"📋 Method 1 failed: json_end ({json_end}) <= json_start ({json_start})", flush=True)
         
-        course_data = json.loads(response_text)
+        # Method 2: Look for JSON object directly (starts with {)
+        if not json_str:
+            print(f"📋 Method 1 didn't work, trying Method 2...", flush=True)
+            # Find first { and last }
+            first_brace = response_text.find("{")
+            last_brace = response_text.rfind("}")
+            
+            if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+                print(f"📋 Found JSON object at position {first_brace}-{last_brace}", flush=True)
+                json_str = response_text[first_brace:last_brace+1]
+            else:
+                print(f"❌ No JSON object found in response", flush=True)
+                raise ValueError("No valid JSON found in AI response")
+        else:
+            print(f"📋 Using Method 1 result", flush=True)
+        
+        print(f"📋 Extracted JSON length: {len(json_str)} chars", flush=True)
+        print(f"📋 JSON preview: {json_str[:300]}...", flush=True)
+        
+        course_data = json.loads(json_str)
         
         # IMPORTANT FIX: Validate required fields để tránh crash
         required_fields = ["title", "description", "category", "level", "modules"]
@@ -867,7 +914,9 @@ Trả về JSON với cấu trúc:
         return course_data
         
     except (json.JSONDecodeError, ValueError, KeyError) as e:
-        print(f"AI course generation validation error: {str(e)}")
+        print(f"❌ AI course generation error: {type(e).__name__}: {str(e)}", flush=True)
+        print(f"📝 JSON preview: {json_str[:500] if 'json_str' in locals() else 'N/A'}", flush=True)
+        print(f"🔄 Returning fallback structure...", flush=True)
         # Fallback structure với learning_outcomes đúng format
         return {
             "title": f"Khóa học về {prompt[:50]}",
@@ -895,12 +944,10 @@ Trả về JSON với cấu trúc:
                     "estimated_hours": 2,
                     "learning_outcomes": [
                         {
-                            "id": "m1_lo1",
                             "description": "Nắm được tổng quan về khóa học",
                             "skill_tag": "overview"
                         },
                         {
-                            "id": "m1_lo2",
                             "description": "Chuẩn bị kiến thức nền tảng",
                             "skill_tag": "foundation"
                         }
@@ -918,7 +965,10 @@ Trả về JSON với cấu trúc:
             ]
         }
     except Exception as e:
-        print(f"Unexpected error in course generation: {str(e)}")
+        print(f"❌ Unexpected error in course generation: {type(e).__name__}: {str(e)}")
+        import traceback
+        print(f"📍 Traceback: {traceback.format_exc()}")
+        print(f"🔄 Returning fallback structure...")
         # Same fallback structure với learning_outcomes đúng format
         return {
             "title": f"Khóa học về {prompt[:50]}",
@@ -946,12 +996,10 @@ Trả về JSON với cấu trúc:
                     "estimated_hours": 2,
                     "learning_outcomes": [
                         {
-                            "id": "m1_lo1",
                             "description": "Nắm được tổng quan về khóa học",
                             "skill_tag": "overview"
                         },
                         {
-                            "id": "m1_lo2",
                             "description": "Chuẩn bị kiến thức nền tảng",
                             "skill_tag": "foundation"
                         }
@@ -1087,9 +1135,9 @@ CHÚ Ý:
 
 Chỉ trả về JSON thuần túy, không có markdown code block hay text thừa."""
 
-        # Call Gemini AI
-        model = genai.GenerativeModel('gemini-pro')
-        response = model.generate_content(prompt)
+        # Call Gemini AI (use model from settings, not hardcoded)
+        quiz_model = genai.GenerativeModel(settings.gemini_model)
+        response = quiz_model.generate_content(prompt)
         
         if not response or not response.text:
             raise ValueError("AI did not return any response")
@@ -1371,3 +1419,187 @@ def _generate_module_quiz_fallback(
         "estimated_time_minutes": estimated_time
     }
 
+
+async def generate_practice_exercises(
+    topic: str,
+    difficulty: str = "medium",
+    question_count: int = 5,
+    practice_type: str = "multiple_choice",
+    focus_skills: Optional[List[str]] = None,
+    learning_outcomes: Optional[List[Dict]] = None,
+    content_summary: str = ""
+) -> Dict:
+    """
+    Sinh bài tập luyện tập bằng AI với context đầy đủ
+    
+    Args:
+        topic: Chủ đề cần luyện tập
+        difficulty: easy|medium|hard
+        question_count: Số câu hỏi (1-20)
+        practice_type: multiple_choice|short_answer|mixed
+        focus_skills: Danh sách skill tags cần tập trung (optional)
+        learning_outcomes: Learning outcomes từ course/lesson (optional)
+        content_summary: Tóm tắt nội dung từ course/lesson (optional)
+        
+    Returns:
+        Dict with exercises array
+    """
+    try:
+        import sys
+        print(f"\n🤖 AI Service: generate_practice_exercises", flush=True)
+        print(f"  Topic: {topic}", flush=True)
+        print(f"  Difficulty: {difficulty}", flush=True)
+        print(f"  Count: {question_count}", flush=True)
+        print(f"  Has learning outcomes: {len(learning_outcomes) if learning_outcomes else 0}", flush=True)
+        print(f"  Has content summary: {len(content_summary)}", flush=True)
+        
+        # Map difficulty
+        diff_map = {
+            "easy": "dễ",
+            "medium": "trung bình",
+            "hard": "khó"
+        }
+        diff_vn = diff_map.get(difficulty, "trung bình")
+        
+        # Build prompt with context (giảm context để tránh quá dài)
+        prompt = f"""Bạn là chuyên gia giáo dục, hãy tạo {question_count} câu hỏi luyện tập chất lượng cao.
+
+CHỦ ĐỀ: {topic}
+
+"""
+        
+        # Add content summary if available (giới hạn 200 chars)
+        if content_summary:
+            summary_short = content_summary[:200]
+            prompt += f"""NỘI DUNG THAM KHẢO:
+{summary_short}
+
+"""
+        
+        # Add learning outcomes if available (max 3 outcomes)
+        if learning_outcomes and len(learning_outcomes) > 0:
+            prompt += "MỤC TIÊU HỌC TẬP:\n"
+            for i, outcome in enumerate(learning_outcomes[:3], 1):  # Max 3 outcomes
+                desc = outcome.get("description", "")
+                skill = outcome.get("skill_tag", "")
+                if desc:
+                    # Giới hạn description 100 chars
+                    desc_short = desc[:100]
+                    prompt += f"{i}. {desc_short}"
+                    if skill:
+                        prompt += f" (Kỹ năng: {skill})"
+                    prompt += "\n"
+            prompt += "\n"
+        
+        # Add requirements
+        prompt += f"""YÊU CẦU:
+1. Độ khó: {diff_vn}
+2. Số câu hỏi: {question_count}
+3. Loại câu hỏi: {practice_type}
+"""
+        
+        if focus_skills:
+            prompt += f"4. Tập trung vào các kỹ năng: {', '.join(focus_skills[:3])}\n"  # Max 3 skills
+        
+        prompt += """
+QUAN TRỌNG - ĐỊNH DẠNG JSON:
+Chỉ trả về JSON thuần túy, KHÔNG có markdown, KHÔNG có code block, KHÔNG có text thừa.
+
+{
+  "exercises": [
+    {
+      "id": "uuid-here",
+      "type": "theory",
+      "question": "Nội dung câu hỏi",
+      "options": ["A. Đáp án 1", "B. Đáp án 2", "C. Đáp án 3", "D. Đáp án 4"],
+      "correct_answer": "A. Đáp án 1",
+      "explanation": "Giải thích ngắn gọn",
+      "difficulty": "Medium",
+      "related_skill": "skill-tag",
+      "points": 10
+    }
+  ]
+}
+
+LƯU Ý:
+- CHỈ JSON, KHÔNG có ```json hoặc ``` hay markdown
+- Với short_answer: options = null
+- type: theory, coding, hoặc problem-solving
+- Câu hỏi ngắn gọn, rõ ràng
+"""
+
+        print(f"  Calling Gemini API...", flush=True)
+        
+        # Call Gemini AI
+        model = genai.GenerativeModel(settings.gemini_model)
+        response = model.generate_content(prompt)
+        
+        response_text = response.text.strip()
+        
+        print(f"  Response length: {len(response_text)} chars", flush=True)
+        print(f"  Response preview: {response_text[:200]}...", flush=True)
+        
+        # Extract JSON - IMPROVED LOGIC
+        json_str = None
+        
+        # Method 1: Check for ```json specifically
+        if "```json" in response_text:
+            print(f"  Found ```json block", flush=True)
+            json_start = response_text.find("```json") + 7
+            json_end = response_text.find("```", json_start)
+            if json_end > json_start:
+                json_str = response_text[json_start:json_end].strip()
+        
+        # Method 2: Look for JSON object directly (starts with {)
+        if not json_str:
+            # Find first { and last }
+            first_brace = response_text.find("{")
+            last_brace = response_text.rfind("}")
+            
+            if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+                print(f"  Found JSON object at position {first_brace}-{last_brace}", flush=True)
+                json_str = response_text[first_brace:last_brace+1]
+            else:
+                print(f"  No JSON object found in response", flush=True)
+                raise ValueError("No valid JSON found in AI response")
+        
+        print(f"  Extracted JSON length: {len(json_str)} chars", flush=True)
+        print(f"  JSON preview: {json_str[:300]}...", flush=True)
+        
+        # Parse JSON
+        print(f"  Parsing JSON...", flush=True)
+        data = json.loads(json_str)
+        
+        # Validate
+        if "exercises" not in data or not isinstance(data["exercises"], list):
+            raise ValueError("Invalid response structure - missing exercises array")
+        
+        print(f"  ✅ Parsed successfully! Found {len(data['exercises'])} exercises", flush=True)
+        
+        # Add UUIDs if missing
+        for ex in data["exercises"]:
+            if "id" not in ex or not ex["id"] or ex["id"] == "uuid-here":
+                ex["id"] = str(generate_uuid())
+        
+        return data
+        
+    except json.JSONDecodeError as e:
+        print(f"\n❌ JSON Parse Error!", flush=True)
+        print(f"  Error: {str(e)}", flush=True)
+        print(f"  Position: line {e.lineno}, col {e.colno}", flush=True)
+        if 'json_str' in locals():
+            print(f"  Problematic JSON:", flush=True)
+            lines = json_str.split('\n')
+            for i, line in enumerate(lines[:20], 1):  # Show first 20 lines
+                print(f"    {i}: {line}", flush=True)
+        # Fallback: Return empty
+        return {"exercises": []}
+        
+    except Exception as e:
+        print(f"\n❌ AI generate_practice_exercises failed!", flush=True)
+        print(f"  Error type: {type(e).__name__}", flush=True)
+        print(f"  Error: {str(e)}", flush=True)
+        import traceback
+        traceback.print_exc()
+        # Fallback: Return empty
+        return {"exercises": []}

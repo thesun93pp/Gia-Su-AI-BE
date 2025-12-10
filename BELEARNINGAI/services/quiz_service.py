@@ -430,6 +430,10 @@ async def grade_quiz_attempt(quiz: Quiz, answers: List[Dict]) -> tuple[float, bo
     Returns:
         tuple (score: float, passed: bool)
     """
+    print(f"\n🔍 DEBUG: Starting grade_quiz_attempt")
+    print(f"📊 Total questions in quiz: {len(quiz.questions)}")
+    print(f"📝 Total answers from user: {len(answers)}")
+    
     correct_count = 0
     total_count = len(quiz.questions)
     mandatory_correct = 0
@@ -441,17 +445,67 @@ async def grade_quiz_attempt(quiz: Quiz, answers: List[Dict]) -> tuple[float, bo
         if hasattr(ans, 'question_id'):
             # AnswerItem object - access as attributes
             answer_map[ans.question_id] = ans.selected_option
+            print(f"  📌 User answer: question_id={ans.question_id}, selected_option={ans.selected_option}")
         else:
             # Already a dict
-            answer_map[ans["question_id"]] = ans.get("answer") or ans.get("student_answer") or ans.get("selected_option")
+            q_id = ans["question_id"]
+            answer = ans.get("answer") or ans.get("student_answer") or ans.get("selected_option")
+            answer_map[q_id] = answer
+            print(f"  📌 User answer: question_id={q_id}, answer={answer}")
     
-    for question in quiz.questions:
+    print(f"\n🔍 Checking each question:")
+    for idx, question in enumerate(quiz.questions):
         q_id = question.get("question_id") or question.get("id")
         user_answer = answer_map.get(q_id)
         correct_answer = question.get("correct_answer")
         is_mandatory = question.get("is_mandatory", False)
         
-        if str(user_answer).strip().lower() == str(correct_answer).strip().lower():
+        print(f"\n  Question {idx + 1}:")
+        print(f"    question_id: {q_id}")
+        print(f"    user_answer: {user_answer}")
+        print(f"    correct_answer: {correct_answer}")
+        print(f"    is_mandatory: {is_mandatory}")
+        
+        if user_answer is None:
+            print(f"    ❌ No answer found for this question_id!")
+            continue
+        
+        if correct_answer is None:
+            print(f"    ❌ No correct_answer in DB!")
+            continue
+        
+        # Normalize for comparison
+        user_ans_normalized = str(user_answer).strip().lower()
+        correct_ans_normalized = str(correct_answer).strip().lower()
+        
+        print(f"    Comparing: '{user_ans_normalized}' vs '{correct_ans_normalized}'")
+        
+        # FLEXIBLE MATCHING:
+        # 1. Exact match (case-insensitive)
+        # 2. User answer is just option letter (A, B, C, D) and correct answer starts with it
+        # 3. Correct answer contains user answer
+        is_correct = False
+        
+        if user_ans_normalized == correct_ans_normalized:
+            # Exact match
+            is_correct = True
+            print(f"    ✅ CORRECT (exact match)!")
+        elif len(user_answer.strip()) == 1 and correct_ans_normalized.startswith(user_ans_normalized):
+            # User submitted just "A" and correct answer is "a. python -m venv myenv"
+            is_correct = True
+            print(f"    ✅ CORRECT (option letter match)!")
+        elif user_ans_normalized.startswith(correct_ans_normalized):
+            # User submitted "A. python -m venv myenv" and correct answer is "A"
+            is_correct = True
+            print(f"    ✅ CORRECT (user answer starts with correct)!")
+        elif correct_ans_normalized.startswith(user_ans_normalized + "."):
+            # User submitted "A" and correct answer is "A. ..."
+            is_correct = True
+            print(f"    ✅ CORRECT (correct answer starts with user + dot)!")
+        else:
+            print(f"    ❌ WRONG!")
+        
+        if is_correct:
             correct_count += 1
             if is_mandatory:
                 mandatory_correct += 1
@@ -461,6 +515,14 @@ async def grade_quiz_attempt(quiz: Quiz, answers: List[Dict]) -> tuple[float, bo
     # Pass condition: score >= passing_score AND all mandatory questions correct
     mandatory_pass = (mandatory_correct == mandatory_total) if mandatory_total > 0 else True
     passed = (score >= quiz.passing_score) and mandatory_pass
+    
+    print(f"\n📊 GRADING RESULT:")
+    print(f"  Correct: {correct_count}/{total_count}")
+    print(f"  Score: {score}%")
+    print(f"  Passing score: {quiz.passing_score}%")
+    print(f"  Mandatory: {mandatory_correct}/{mandatory_total}")
+    print(f"  Mandatory pass: {mandatory_pass}")
+    print(f"  Final result: {'PASS' if passed else 'FAIL'}")
     
     return score, passed
 
@@ -482,11 +544,32 @@ async def build_quiz_results(quiz: Quiz, attempt: QuizAttempt) -> Dict:
     for question in quiz.questions:
         q_id = question.get("question_id") or question.get("id")
         user_answer_obj = answer_map.get(q_id, {})
-        user_answer = user_answer_obj.get("answer") or user_answer_obj.get("student_answer")
-        correct_answer = question.get("correct_answer")
+        
+        # Get user answer from multiple possible fields
+        user_answer = (
+            user_answer_obj.get("selected_option") or 
+            user_answer_obj.get("answer") or 
+            user_answer_obj.get("student_answer") or 
+            ""  # Default to empty string if None
+        )
+        
+        correct_answer = question.get("correct_answer", "")
         is_mandatory = question.get("is_mandatory", False)
         
-        is_correct = str(user_answer).strip().lower() == str(correct_answer).strip().lower()
+        # Use flexible matching logic (same as grade_quiz_attempt)
+        is_correct = False
+        if user_answer and correct_answer:
+            user_ans_normalized = str(user_answer).strip().lower()
+            correct_ans_normalized = str(correct_answer).strip().lower()
+            
+            if user_ans_normalized == correct_ans_normalized:
+                is_correct = True
+            elif len(str(user_answer).strip()) == 1 and correct_ans_normalized.startswith(user_ans_normalized):
+                is_correct = True
+            elif user_ans_normalized.startswith(correct_ans_normalized):
+                is_correct = True
+            elif correct_ans_normalized.startswith(user_ans_normalized + "."):
+                is_correct = True
         
         if is_correct:
             correct_count += 1
@@ -501,8 +584,8 @@ async def build_quiz_results(quiz: Quiz, attempt: QuizAttempt) -> Dict:
             "question_content": question.get("question_text", ""),
             "question_type": question.get("type", "multiple_choice"),
             "options": question.get("options"),
-            "student_answer": user_answer,
-            "correct_answer": correct_answer,
+            "student_answer": str(user_answer) if user_answer else "",  # Ensure string, never None
+            "correct_answer": str(correct_answer) if correct_answer else "",
             "is_correct": is_correct,
             "is_mandatory": is_mandatory,
             "score": question.get("points", 1) if is_correct else 0,

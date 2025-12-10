@@ -138,8 +138,8 @@ async def handle_update_profile(
 async def handle_list_users_admin(
     current_user: dict,
     role: Optional[str] = None,
-    status: Optional[str] = None,
-    search: Optional[str] = None,
+    status_filter: Optional[str] = None,  # Match với router
+    keyword: Optional[str] = None,  # Match với router (search → keyword)
     sort_by: str = "created_at",
     sort_order: str = "desc",
     skip: int = 0,
@@ -152,8 +152,8 @@ async def handle_list_users_admin(
     Args:
         current_user: User dict từ JWT (phải là admin)
         role: Filter role
-        status: Filter status
-        search: Search tên hoặc email
+        status_filter: Filter status (match với router alias)
+        keyword: Search tên hoặc email (match với router)
         sort_by: Field sort
         sort_order: asc|desc
         skip, limit: Pagination
@@ -165,8 +165,8 @@ async def handle_list_users_admin(
         # Verify admin role (RBAC handled by middleware)
         result = await user_service.list_users_admin(
             role=role,
-            status=status,
-            search=search,
+            status=status_filter,  # Pass as status to service
+            search=keyword,  # Pass as search to service
             sort_by=sort_by,
             sort_order=sort_order,
             skip=skip,

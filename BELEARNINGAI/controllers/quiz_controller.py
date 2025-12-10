@@ -32,6 +32,8 @@ from schemas.quiz import (
     RetakeQuestion,
     PracticeExercisesGenerateRequest,
     PracticeExercisesGenerateResponse,
+    SourceInfo,
+    Exercise,  # ← THÊM MỚI
     QuizCreateRequest,
     QuizCreateResponse,
     QuizListResponse,
@@ -366,6 +368,9 @@ async def handle_generate_practice_exercises(
     """
     2.4.7: Sinh bài tập thực hành tự động bằng AI
     
+    Logic đơn giản: AI sinh bài tập dựa trên topic/lesson/course
+    KHÔNG cần phân tích câu trả lời sai
+    
     Args:
         request: PracticeExercisesGenerateRequest
         current_user: User hiện tại
@@ -375,11 +380,146 @@ async def handle_generate_practice_exercises(
         
     Endpoint: POST /api/v1/ai/generate-practice
     """
-    # TODO: Implement AI practice generation with real AI service
-    # Mock response matches API_SCHEMA Section 4.11
-    from datetime import datetime
+    from models.models import Lesson, Course
     import uuid
     
+    user_id = current_user.get("user_id")
+    
+    # 1. VALIDATE: Phải có ít nhất 1 trong 3
+    if not request.lesson_id and not request.course_id and not request.topic_prompt:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Phải cung cấp ít nhất một trong: lesson_id, course_id, hoặc topic_prompt"
+        )
+    
+    # 2. VERIFY & GET CONTEXT: Kiểm tra lesson/course tồn tại và lấy context
+    lesson_title = None
+    course_title = None
+    learning_outcomes = []
+    content_summary = ""
+    
+    if request.lesson_id:
+        try:
+            lesson = await Lesson.get(request.lesson_id)
+            if not lesson:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Không tìm thấy lesson với ID: {request.lesson_id}"
+                )
+            lesson_title = lesson.title
+            
+            # Get lesson content for context
+            if hasattr(lesson, 'content') and lesson.content:
+                # Extract text from content (limit to first 200 chars)
+                content_summary = str(lesson.content)[:200]
+            
+            if hasattr(lesson, 'description') and lesson.description:
+                content_summary = lesson.description[:200]
+                
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Không tìm thấy lesson với ID: {request.lesson_id}"
+            )
+    
+    if request.course_id:
+        try:
+            course = await course_service.get_course_by_id(request.course_id)
+            if not course:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Không tìm thấy course với ID: {request.course_id}"
+                )
+            course_title = course.title
+            
+            # Get learning outcomes from course modules
+            if hasattr(course, 'modules') and course.modules:
+                for module in course.modules[:3]:  # First 3 modules for context
+                    if hasattr(module, 'learning_outcomes') and module.learning_outcomes:
+                        for outcome in module.learning_outcomes:
+                            if isinstance(outcome, dict):
+                                learning_outcomes.append({
+                                    "description": outcome.get("description", ""),
+                                    "skill_tag": outcome.get("skill_tag", "")
+                                })
+                            elif hasattr(outcome, 'description'):
+                                learning_outcomes.append({
+                                    "description": outcome.description,
+                                    "skill_tag": getattr(outcome, 'skill_tag', '')
+                                })
+            
+            # Get course description
+            if hasattr(course, 'description') and course.description:
+                content_summary = course.description[:200]
+                
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Không tìm thấy course với ID: {request.course_id}"
+            )
+    
+    # 3. PREPARE: Xác định topic và context để sinh bài tập
+    topic = request.topic_prompt
+    if not topic:
+        if lesson_title:
+            topic = f"Bài tập luyện tập cho lesson: {lesson_title}"
+        elif course_title:
+            topic = f"Bài tập luyện tập cho course: {course_title}"
+        else:
+            topic = "Bài tập luyện tập tổng hợp"
+    
+    # 4. GENERATE: Gọi AI service để sinh bài tập
+    import sys
+    print(f"\n🔍 DEBUG: Generating practice exercises", flush=True)
+    print(f"  Topic: {topic}", flush=True)
+    print(f"  Difficulty: {request.difficulty}", flush=True)
+    print(f"  Question count: {request.question_count}", flush=True)
+    print(f"  Practice type: {request.practice_type}", flush=True)
+    print(f"  Learning outcomes: {len(learning_outcomes)}", flush=True)
+    print(f"  Content summary length: {len(content_summary)}", flush=True)
+    
+    try:
+        print(f"  Calling ai_service.generate_practice_exercises...", flush=True)
+        exercises_data = await ai_service.generate_practice_exercises(
+            topic=topic,
+            difficulty=request.difficulty,
+            question_count=request.question_count,
+            practice_type=request.practice_type,
+            focus_skills=request.focus_skills,
+            learning_outcomes=learning_outcomes,  # ← THÊM CONTEXT
+            content_summary=content_summary  # ← THÊM CONTEXT
+        )
+        
+        print(f"  AI service returned: {len(exercises_data.get('exercises', []))} exercises", flush=True)
+        
+        # Convert to Exercise schema
+        exercises = []
+        for ex in exercises_data.get("exercises", []):
+            exercises.append(Exercise(
+                id=ex.get("id", str(uuid.uuid4())),
+                type=ex.get("type", "theory"),
+                question=ex.get("question", ""),
+                options=ex.get("options"),
+                correct_answer=ex.get("correct_answer", ""),
+                explanation=ex.get("explanation", ""),
+                difficulty=ex.get("difficulty", request.difficulty.capitalize()),
+                related_skill=ex.get("related_skill", "general"),
+                points=ex.get("points", 10)
+            ))
+        
+        print(f"  ✅ Successfully converted {len(exercises)} exercises")
+        
+    except Exception as e:
+        # Fallback nếu AI service fail
+        import traceback
+        print(f"\n❌ AI service failed!")
+        print(f"  Error type: {type(e).__name__}")
+        print(f"  Error message: {str(e)}")
+        print(f"  Traceback:")
+        traceback.print_exc()
+        exercises = []
+    
+    # 5. RETURN: Response
     return PracticeExercisesGenerateResponse(
         practice_id=str(uuid.uuid4()),
         source=SourceInfo(
@@ -388,11 +528,11 @@ async def handle_generate_practice_exercises(
             topic_prompt=request.topic_prompt
         ),
         difficulty=request.difficulty,
-        exercises=[],
-        total_questions=request.question_count,
-        estimated_time=request.question_count * 2,  # 2 minutes per question
+        exercises=exercises,
+        total_questions=len(exercises),
+        estimated_time=len(exercises) * 2,  # 2 phút/câu
         created_at=datetime.utcnow(),
-        message="Chức năng đang phát triển - sẽ tích hợp AI service"
+        message="Bài luyện tập đã được tạo thành công" if exercises else "Chức năng đang phát triển - sẽ tích hợp AI service"
     )
 
 
