@@ -837,7 +837,15 @@ async def create_course_admin(
         preview_video_url=preview_video_url,
         prerequisites=prerequisites or [],
         learning_outcomes=learning_outcomes or [],
-        status=status
+        status=status,
+        # Thêm các trường bắt buộc còn thiếu
+        modules=[],
+        total_modules=0,
+        total_lessons=0,
+        total_duration_minutes=0,
+        enrollment_count=0,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow()
     )
     
     await course.insert()
