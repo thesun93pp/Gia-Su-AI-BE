@@ -28,11 +28,12 @@ class UserSummary(BaseModel):
 
 
 class AdminUserListResponse(BaseModel):
+    summary: Optional[str] = None
     data: List[AdminUserListItem]
     total: int
     skip: int
     limit: int
-    summary: UserSummary
+    
 
 
 class UserStatistics(BaseModel):
