@@ -1003,7 +1003,7 @@ async def seed_progress(enrollment_ids: List[str]):
                 status=status,
                 completion_date=completion_date,
                 time_spent_minutes=random.randint(5, 60) if status == "completed" else 0,
-                video_progress_seconds=random.randint(0, 1800) if status in ["in-progress", "completed"] else 0
+                video_progress_seconds=random.randint(0, 1800) if status in ["in-progress", "completed"] else None
             ))
 
         progress = Progress(

@@ -29,7 +29,7 @@ from schemas.admin import (
     AdminClassListResponse,
     AdminClassDetailResponse
 )
-from services import admin_service, course_service
+from services import admin_service
 
 
 # ============================================================================
@@ -486,11 +486,11 @@ async def handle_create_course_admin(
 ) -> AdminCourseCreateResponse:
     """
     4.2.3: Tạo khóa học chính thức (public course)
-
+    
     Args:
         course_data: Dữ liệu khóa học mới
         current_user: Dict chứa thông tin admin từ JWT
-
+        
     Returns:
         AdminCourseCreateResponse với thông tin khóa học mới
     """
@@ -500,26 +500,10 @@ async def handle_create_course_admin(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Chỉ admin mới có quyền tạo khóa học chính thức"
             )
-
-        # Lấy admin_id từ current_user
-        admin_id = current_user.get("user_id")
-
-        # Gọi course_service.create_course_admin với đầy đủ tham số
-        created_course = await course_service.create_course_admin(
-            admin_id=admin_id,
-            title=course_data.title,
-            description=course_data.description,
-            category=course_data.category,
-            level=course_data.level,
-            language=course_data.language,
-            thumbnail_url=course_data.thumbnail_url,
-            preview_video_url=course_data.preview_video_url,
-            prerequisites=course_data.prerequisites,
-            learning_outcomes=course_data.learning_outcomes,
-            status=course_data.status
-        )
+        
+        created_course = await admin_service.create_course_admin(course_data.dict())
         return AdminCourseCreateResponse(**created_course)
-
+        
     except HTTPException:
         raise
     except Exception as e:
