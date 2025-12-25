@@ -21,21 +21,47 @@ router = APIRouter(prefix="/api/v1/adaptive-learning", tags=["Adaptive Learning"
 
 class ApplyAssessmentRequest(BaseModel):
     """Request để áp dụng assessment vào enrollment"""
-    assessment_session_id: str = Field(..., description="ID của assessment session")
-    course_id: str = Field(..., description="ID của khóa học")
-    enrollment_id: str = Field(..., description="ID của enrollment")
-    skip_threshold: float = Field(0.85, description="Ngưỡng điểm để skip (0-1)", ge=0, le=1)
-    time_threshold: float = Field(0.50, description="Ngưỡng thời gian (0-1)", ge=0, le=1)
+    assessment_session_id: str = Field(
+        ...,
+        description="ID của assessment session (lấy từ response của POST /api/v1/assessments/generate)",
+        examples=["674d1a2b3c4d5e6f7a8b9c0d"]
+    )
+    course_id: str = Field(
+        ...,
+        description="ID của khóa học (lấy từ GET /api/v1/courses)",
+        examples=["674b8e9f8a7c6d5e4f3a2b1c"]
+    )
+    enrollment_id: str = Field(
+        ...,
+        description="ID của enrollment (lấy từ POST /api/v1/enrollments)",
+        examples=["674c9f1a2b3c4d5e6f7a8b9c"]
+    )
+    skip_threshold: float = Field(
+        0.85,
+        description="Ngưỡng điểm để skip (0-1). Mặc định: 0.85 = 85%",
+        ge=0,
+        le=1,
+        examples=[0.85]
+    )
+    time_threshold: float = Field(
+        0.50,
+        description="Ngưỡng thời gian (0-1). Mặc định: 0.50 = 50%",
+        ge=0,
+        le=1,
+        examples=[0.50]
+    )
 
     class Config:
         json_schema_extra = {
-            "example": {
-                "assessment_session_id": "550e8400-e29b-41d4-a716-446655440000",
-                "course_id": "course-python-basics-2024",
-                "enrollment_id": "enrollment-12345",
-                "skip_threshold": 0.85,
-                "time_threshold": 0.50
-            }
+            "examples": [
+                {
+                    "assessment_session_id": "674d1a2b3c4d5e6f7a8b9c0d",
+                    "course_id": "674b8e9f8a7c6d5e4f3a2b1c",
+                    "enrollment_id": "674c9f1a2b3c4d5e6f7a8b9c",
+                    "skip_threshold": 0.85,
+                    "time_threshold": 0.50
+                }
+            ]
         }
 
 
@@ -71,15 +97,25 @@ class ApplyAssessmentResponse(BaseModel):
 
 class AdaptivePathRequest(BaseModel):
     """Request để tạo adaptive path"""
-    enrollment_id: str = Field(..., description="ID của enrollment")
-    assessment_session_id: str = Field(..., description="ID của assessment session")
+    enrollment_id: str = Field(
+        ...,
+        description="ID của enrollment (lấy từ POST /api/v1/enrollments)",
+        examples=["674c9f1a2b3c4d5e6f7a8b9c"]
+    )
+    assessment_session_id: str = Field(
+        ...,
+        description="ID của assessment session (lấy từ POST /api/v1/assessments/generate)",
+        examples=["674d1a2b3c4d5e6f7a8b9c0d"]
+    )
 
     class Config:
         json_schema_extra = {
-            "example": {
-                "enrollment_id": "enrollment-12345",
-                "assessment_session_id": "550e8400-e29b-41d4-a716-446655440000"
-            }
+            "examples": [
+                {
+                    "enrollment_id": "674c9f1a2b3c4d5e6f7a8b9c",
+                    "assessment_session_id": "674d1a2b3c4d5e6f7a8b9c0d"
+                }
+            ]
         }
 
 
@@ -132,22 +168,51 @@ class AdaptivePathResponse(BaseModel):
 
 class TrackCompletionRequest(BaseModel):
     """Request để track lesson completion"""
-    course_id: str = Field(..., description="ID của khóa học")
-    lesson_id: str = Field(..., description="ID của lesson")
-    time_spent_seconds: int = Field(..., description="Thời gian học (giây)")
-    quiz_score: Optional[float] = Field(None, description="Điểm quiz (0-100)")
-    attempts: int = Field(1, description="Số lần thử")
+    course_id: str = Field(
+        ...,
+        description="ID của khóa học (lấy từ GET /api/v1/courses)",
+        examples=["674b8e9f8a7c6d5e4f3a2b1c"]
+    )
+    lesson_id: str = Field(
+        ...,
+        description="ID của lesson vừa hoàn thành",
+        examples=["674e1a2b3c4d5e6f7a8b9c0d"]
+    )
+    time_spent_seconds: int = Field(
+        ...,
+        description="Thời gian học (giây). VD: 600 = 10 phút (fast), 7200 = 2 giờ (slow)",
+        examples=[600]
+    )
+    quiz_score: Optional[float] = Field(
+        None,
+        description="Điểm quiz (0-100). VD: 95 = cao, 55 = thấp",
+        examples=[95.0]
+    )
+    attempts: int = Field(
+        1,
+        description="Số lần thử. VD: 1 = pass ngay, 3 = nhiều lần",
+        examples=[1]
+    )
     completed_at: Optional[datetime] = None
 
     class Config:
         json_schema_extra = {
-            "example": {
-                "course_id": "course-python-basics-2024",
-                "lesson_id": "lesson-variables-101",
-                "time_spent_seconds": 600,
-                "quiz_score": 95.0,
-                "attempts": 1
-            }
+            "examples": [
+                {
+                    "course_id": "674b8e9f8a7c6d5e4f3a2b1c",
+                    "lesson_id": "674e1a2b3c4d5e6f7a8b9c0d",
+                    "time_spent_seconds": 600,
+                    "quiz_score": 95.0,
+                    "attempts": 1
+                },
+                {
+                    "course_id": "674b8e9f8a7c6d5e4f3a2b1c",
+                    "lesson_id": "674e1a2b3c4d5e6f7a8b9c0d",
+                    "time_spent_seconds": 7200,
+                    "quiz_score": 55.0,
+                    "attempts": 3
+                }
+            ]
         }
 
 

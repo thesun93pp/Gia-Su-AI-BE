@@ -127,10 +127,33 @@ async def seed_users() -> Dict[str, List[str]]:
         users_to_create.append(instructor)
         print(f"👨‍🏫 Đã chuẩn bị Giảng viên: {instructor.full_name} ({instructor.email})")
 
-    # 3. Tạo Học viên
-    for i in range(10):
+    # 3. Tạo Học viên TEST (với password cố định để dễ test)
+    test_students = [
+        {"full_name": "Nguyễn Văn Test", "email": "student.test1@example.com"},
+        {"full_name": "Trần Thị Test", "email": "student.test2@example.com"},
+        {"full_name": "Lê Văn Test", "email": "student.test3@example.com"},
+    ]
+
+    for student_data in test_students:
+        student = User(
+            full_name=student_data["full_name"],
+            email=student_data["email"],
+            hashed_password=hash_password("Student@2024"),  # ✅ Password cố định
+            role="student",
+            status="active",
+            email_verified=True,
+            bio="Tài khoản test cho Adaptive Learning",
+            learning_preferences=["Programming", "Data Science"],
+            avatar_url=fake.image_url(),
+            created_at=datetime.now(timezone.utc) - timedelta(days=10),
+            updated_at=datetime.now(timezone.utc)
+        )
+        users_to_create.append(student)
+        print(f"🎓 Đã chuẩn bị Học viên TEST: {student.full_name} ({student.email}) - Password: Student@2024")
+
+    # 4. Tạo thêm học viên ngẫu nhiên
+    for i in range(7):
         full_name = fake.name()
-        # Tạo email hợp lệ bằng cách sử dụng fake.email() hoặc tạo từ username đơn giản
         email = fake.email()
         student = User(
             full_name=full_name,
@@ -1026,92 +1049,154 @@ async def seed_progress(enrollment_ids: List[str]):
     
     print(f"✅ Đã tạo thành công {len(progress_to_create)} bản ghi tiến độ học tập.")
 
-async def seed_assessment_sessions(user_ids: Dict[str, List[str]]):
+async def seed_assessment_sessions(user_ids: Dict[str, List[str]], course_ids: Dict[str, str]):
     """
     Tạo dữ liệu mẫu cho các phiên đánh giá năng lực (AssessmentSession).
-    - Tạo 5-7 phiên đánh giá cho các học viên ngẫu nhiên.
-    - Một số phiên đã hoàn thành và được chấm điểm, một số đang chờ.
+    - Tạo assessment sessions cho khóa Python với module_scores chi tiết
+    - Tạo cả high-score và low-score sessions để test Adaptive Learning
     """
-    print("\n--- Bắt đầu tạo dữ liệu cho Assessment Sessions ---")
-    
+    print("\n--- Bắt đầu tạo dữ liệu cho Assessment Sessions (Adaptive Learning Ready) ---")
+
     sessions_to_create = []
     student_ids = user_ids["student"]
-    
-    categories = ["Programming", "Data Science", "Business", "Math"]
-    subjects = {
-        "Programming": ["Python", "JavaScript", "Bảo mật"],
-        "Data Science": ["Pandas", "Machine Learning"],
-        "Business": ["Marketing", "Quản trị"],
-        "Math": ["Đại số", "Giải tích"]
-    }
 
-    for _ in range(random.randint(5, 7)):
+    # Lấy Python course để tạo assessment
+    python_course_id = course_ids.get("Lập trình Python từ Cơ bản đến Nâng cao")
+    if not python_course_id:
+        print("⚠️ Không tìm thấy Python course, skip assessment sessions")
+        return
+
+    # Lấy course và modules
+    python_course = await Course.get(python_course_id)
+    if not python_course or not python_course.modules:
+        print("⚠️ Python course không có modules, skip assessment sessions")
+        return
+
+    print(f"  📚 Tạo assessment cho course: {python_course.title}")
+    print(f"  📦 Course có {len(python_course.modules)} modules")
+
+    # Tạo 3 assessment sessions với điểm khác nhau
+    assessment_scenarios = [
+        {
+            "name": "High Performer (Auto-Skip Ready)",
+            "score_range": (85, 95),
+            "session_type": "placement",
+            "proficiency_level": "Advanced",
+            "description": "Học viên giỏi, có thể skip modules"
+        },
+        {
+            "name": "Average Performer (Review Needed)",
+            "score_range": (65, 75),
+            "session_type": "placement",
+            "proficiency_level": "Intermediate",
+            "description": "Học viên trung bình, cần review"
+        },
+        {
+            "name": "Beginner (Start from Scratch)",
+            "score_range": (40, 55),
+            "session_type": "placement",
+            "proficiency_level": "Beginner",
+            "description": "Học viên mới, cần học từ đầu"
+        }
+    ]
+
+    for scenario in assessment_scenarios:
         student_id = random.choice(student_ids)
-        category = random.choice(categories)
-        subject = random.choice(subjects[category])
-        level = random.choice(["Beginner", "Intermediate", "Advanced"])
-        status = random.choice(["evaluated", "submitted", "pending"])
-        
-        question_count = {"Beginner": 15, "Intermediate": 25, "Advanced": 35}[level]
-        time_limit = {"Beginner": 15, "Intermediate": 22, "Advanced": 30}[level]
-        
-        questions = []
-        for i in range(question_count):
-            questions.append({
-                "question_id": str(uuid.uuid4()),
-                "question_text": f"Câu hỏi về {subject} ở mức độ {level} số {i+1}?",
-                "question_type": "multiple_choice",
-                "difficulty": random.choice(["easy", "medium", "hard"]),
-                "skill_tag": f"{subject.lower()}-skill-{random.randint(1,3)}",
-                "points": random.randint(1, 3),
-                "options": [fake.word() for _ in range(4)]
-            })
 
+        # Tạo questions cho từng module
+        questions = []
+        module_scores = {}
+        question_id_counter = 0
+
+        for module in python_course.modules:
+            module_id = str(module.id)
+            questions_per_module = 5  # 5 câu hỏi mỗi module
+
+            # Tạo questions cho module này
+            module_questions = []
+            for i in range(questions_per_module):
+                question_id_counter += 1
+                question = {
+                    "question_id": str(uuid.uuid4()),
+                    "module_id": module_id,
+                    "question_text": f"Câu hỏi {question_id_counter} về {module.title}?",
+                    "question_type": "multiple_choice",
+                    "difficulty": random.choice(["easy", "medium", "hard"]),
+                    "skill_tag": f"python-module-{module.order}",
+                    "points": 1,
+                    "options": ["Option A", "Option B", "Option C", "Option D"],
+                    "correct_answer": "0",
+                    "time_spent_seconds": random.randint(30, 90)
+                }
+                module_questions.append(question)
+                questions.append(question)
+
+            # Tính điểm cho module dựa trên scenario
+            base_score = random.uniform(*scenario["score_range"])
+            variation = random.uniform(-5, 5)  # Thêm variation
+            module_score = max(0, min(100, base_score + variation))
+
+            # Tính số câu đúng
+            correct_count = int(questions_per_module * (module_score / 100))
+
+            # Xác định proficiency level
+            if module_score >= 85:
+                proficiency = "advanced"
+            elif module_score >= 65:
+                proficiency = "intermediate"
+            else:
+                proficiency = "beginner"
+
+            module_scores[module_id] = {
+                "module_title": module.title,
+                "score": round(module_score, 2),
+                "proficiency_level": proficiency,
+                "questions_count": questions_per_module,
+                "correct_count": correct_count,
+                "time_spent_seconds": sum(q["time_spent_seconds"] for q in module_questions)
+            }
+
+        # Tính overall score
+        overall_score = round(sum(ms["score"] for ms in module_scores.values()) / len(module_scores), 2)
+        total_questions = len(questions)
+        correct_answers = sum(ms["correct_count"] for ms in module_scores.values())
+
+        # Tạo AssessmentSession
         session = AssessmentSession(
-            user_id=student_id,
-            category=category,
-            subject=subject,
-            level=level,
-            total_questions=question_count,
-            time_limit_minutes=time_limit,
+            user_id=str(student_id),
+
+            # Required fields
+            category="Programming",
+            subject="Python",
+            level="Beginner",
+            total_questions=total_questions,
+            time_limit_minutes=30,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+
+            # Status
+            status="evaluated",  # ✅ evaluated để có kết quả
+
+            # Results - use correct field names
+            overall_score=overall_score,  # ✅ Correct field name
+            proficiency_level=scenario["proficiency_level"],  # ✅ Set proficiency level
+
+            # Timestamps
+            submitted_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            evaluated_at=datetime.now(timezone.utc) - timedelta(minutes=30),
+
+            # Data
             questions=questions,
-            status=status,
-            created_at=datetime.now(timezone.utc) - timedelta(days=random.randint(1, 15)),
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=60),
+
+            created_at=datetime.now(timezone.utc) - timedelta(days=random.randint(1, 5))
         )
 
-        if status in ["submitted", "evaluated"]:
-            session.submitted_at = session.created_at + timedelta(minutes=random.randint(10, time_limit))
-            answers = []
-            for q in questions:
-                answers.append({
-                    "question_id": q["question_id"],
-                    "answer_content": "0",
-                    "time_taken_seconds": random.randint(20, 60)
-                })
-            session.answers = answers
-
-        if status == "evaluated":
-            score = round(random.uniform(40.0, 98.0), 2)
-            session.evaluated_at = session.submitted_at + timedelta(seconds=random.randint(30, 90))
-            session.overall_score = score
-            session.proficiency_level = "Beginner" if score < 50 else ("Intermediate" if score < 80 else "Advanced")
-            session.skill_analysis = {
-                "skill_tag": "python-syntax", "questions_count": 5, "correct_count": 3,
-                "proficiency_percentage": 60.0, "strength_level": "Average",
-                "detailed_feedback": "Bạn cần cải thiện thêm về cú pháp Python."
-            }
-            session.knowledge_gaps = [{
-                "gap_area": "Decorators", "description": "Chưa hiểu rõ về decorators.",
-                "importance": "Medium", "suggested_action": "Xem lại bài học về Decorators."
-            }]
-        
         sessions_to_create.append(session)
+        print(f"  ✅ {scenario['name']}: Score {overall_score}% ({correct_answers}/{total_questions} correct)")
 
     if sessions_to_create:
         await AssessmentSession.insert_many(sessions_to_create)
-        
-    print(f"✅ Đã tạo thành công {len(sessions_to_create)} phiên đánh giá năng lực.")
+
+    print(f"✅ Đã tạo thành công {len(sessions_to_create)} assessment sessions cho Adaptive Learning")
 
 async def seed_conversations(user_ids: Dict[str, List[str]], course_ids: Dict[str, str]):
     """
@@ -1296,7 +1381,7 @@ async def seed_recommendations(user_ids: Dict[str, List[str]]):
             user_proficiency_level=session.proficiency_level,
             recommended_courses=recommended_courses,
             ai_personalized_advice="Để phát triển tốt nhất, bạn nên tập trung vào các khóa học được đề xuất và hoàn thành các bài tập thực hành.",
-            created_at=session.evaluated_at + timedelta(seconds=random.randint(60, 120))
+            created_at=(session.evaluated_at or datetime.now(timezone.utc)) + timedelta(seconds=random.randint(60, 120))
         )
         recommendations_to_create.append(recommendation)
 
@@ -1470,11 +1555,11 @@ async def main():
     enrollment_ids = await seed_enrollments(user_ids, course_ids)
     await seed_quizzes_and_attempts(user_ids, lesson_ids)
     await seed_progress(enrollment_ids)
-    await seed_assessment_sessions(user_ids)
+    await seed_assessment_sessions(user_ids, course_ids)  # ✅ Pass course_ids
     await seed_conversations(user_ids, course_ids)
     await seed_classes(user_ids, course_ids)
     await seed_recommendations(user_ids)
-    await seed_personal_courses(user_ids) 
+    await seed_personal_courses(user_ids)
     print("\n🎉 Hoàn tất quá trình khởi tạo dữ liệu mẫu!")
     print("\n📊 THỐNG KÊ DỮ LIỆU:")
     print(f"  👥 Users: {await User.count()}")
@@ -1487,6 +1572,50 @@ async def main():
     print(f"  🎓 Progress Records: {await Progress.count()}")
     print(f"  📊 Quiz Attempts: {await QuizAttempt.count()}")
     print(f"  💡 Recommendations: {await Recommendation.count()}")
+
+    # ✅ In ra thông tin để test Adaptive Learning
+    print("\n" + "="*80)
+    print("🎯 ADAPTIVE LEARNING TEST DATA")
+    print("="*80)
+
+    # Lấy Python course
+    python_course = await Course.find_one({"title": "Lập trình Python từ Cơ bản đến Nâng cao"})
+    if python_course:
+        print(f"\n📚 Course: {python_course.title}")
+        print(f"   🆔 Course ID: {python_course.id}")
+        print(f"   📦 Modules: {python_course.total_modules}")
+        print(f"   📝 Lessons: {python_course.total_lessons}")
+
+        # Lấy enrollments cho course này
+        enrollments = await Enrollment.find({"course_id": str(python_course.id)}).to_list()
+        if enrollments:
+            print(f"\n📋 Enrollments ({len(enrollments)}):")
+            for enr in enrollments[:3]:  # Show first 3
+                user = await User.get(enr.user_id)
+                print(f"   - {user.full_name if user else 'Unknown'}: {enr.id}")
+
+        # Lấy assessment sessions
+        all_assessments = await AssessmentSession.find_all().to_list()
+
+        if all_assessments:
+            print(f"\n🎯 Assessment Sessions ({len(all_assessments)}):")
+            for assess in all_assessments:
+                user = await User.get(assess.user_id)
+                print(f"   - {user.full_name if user else 'Unknown'}: Score {assess.overall_score}%")
+                print(f"     🆔 Assessment ID: {assess.id}")
+                print(f"     📊 Subject: {assess.subject} | Level: {assess.level}")
+                print(f"     ✅ Status: {assess.status} | Proficiency: {assess.proficiency_level}")
+
+                # Tìm enrollment cho Python course
+                enrollment = await Enrollment.find_one({
+                    "user_id": assess.user_id,
+                    "course_id": str(python_course.id)
+                })
+                if enrollment:
+                    print(f"     📋 Enrollment ID (Python Course): {enrollment.id}")
+                print()
+
+
 
 if __name__ == "__main__":
     asyncio.run(main())
