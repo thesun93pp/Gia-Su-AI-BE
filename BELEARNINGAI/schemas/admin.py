@@ -65,6 +65,7 @@ class ProfileInfo(BaseModel):
     phone: Optional[str] = None
     bio: Optional[str] = None
     avatar_url: Optional[str] = None
+    
 
 
 class ActivitySummary(BaseModel):
@@ -77,13 +78,13 @@ class ActivitySummary(BaseModel):
 class AdminUserDetailResponse(BaseModel):
     user_id: str = Field(..., description="UUID")
     full_name: str
-    email: str
+    email: str    
     role: str = Field(..., description="student|instructor|admin")
     status: str = Field(..., description="active|inactive|banned")
     created_at: datetime
     last_login_at: Optional[datetime] = None
     profile: ProfileInfo
-    activity_summary: ActivitySummary
+    activity_summary: Optional[ActivitySummary] = None
 
 
 class AdminCreateUserRequest(BaseModel):
@@ -115,8 +116,8 @@ class AdminUpdateUserRequest(BaseModel):
 
 class AdminUpdateUserResponse(BaseModel):
     user_id: str = Field(..., description="UUID")
-    full_name: str
-    email: str
+    # full_name: str
+    # email: str
     updated_at: datetime
     message: str
 

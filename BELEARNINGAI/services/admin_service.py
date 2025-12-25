@@ -7,6 +7,7 @@ Tuân thủ: CHUCNANG.md Section 4.1-4.3, API_SCHEMA.md
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from fastapi import HTTPException, status
+from pymongo import ASCENDING, DESCENDING
 from models.models import User, Course, Class, Enrollment, Progress
 from utils.security import hash_password, generate_random_password
 
@@ -62,14 +63,18 @@ async def get_users_list_admin(
             User.full_name.contains(search, case_insensitive=True),
             User.email.contains(search, case_insensitive=True)
         ]
-        # Add OR condition for search
-        from beanie.operators import Or
-        query_conditions.append(Or(*search_conditions))
+        # Build search query using Beanie
+        search_query = search_conditions[0]
+        for condition in search_conditions[1:]:
+            search_query |= condition
+        query_conditions.append(search_query)
     
     # Build final query
     if query_conditions:
-        from beanie.operators import And
-        query = User.find(And(*query_conditions))
+        combined_query = query_conditions[0]
+        for condition in query_conditions[1:]:
+            combined_query &= condition
+        query = User.find(combined_query)
     else:
         query = User.find()
     
@@ -238,10 +243,16 @@ async def get_user_detail_admin(user_id: str) -> Dict:
         "status": user.status,
         "created_at": user.created_at.isoformat(),
         "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
-        "profile": {
-            "phone": user.phone,
+        # "profile": {
+        #     "phone": user.phone,
+        #     "bio": user.bio,
+        #     "avatar_url": user.avatar_url
+            
+        # },
+        "profile": {            
             "bio": user.bio,
-            "profile_image": user.profile_image
+            "avatar_url": user.avatar_url
+            
         },
         "enrollments": enrollments_data if user.role == "student" else None,
         "courses": courses_data if user.role == "instructor" else None,
@@ -250,7 +261,9 @@ async def get_user_detail_admin(user_id: str) -> Dict:
             "total_enrollments": len(enrollments_data) if user.role == "student" else None,
             "total_courses_created": len(courses_data) if user.role == "instructor" else None,
             "activity_last_30d": len(recent_activity)
-        }
+        },
+        
+        
     }
 
 
@@ -284,18 +297,13 @@ async def create_user_admin(user_data: Dict) -> Dict:
         )
     
     # Generate password if not provided
-    password = user_data.get("password")
-    if not password:
-        password = generate_random_password()
-    
-    # Hash password
-    hashed_password = hash_password(password)
+    hashed_pwd = hash_password(user_data["password"])
     
     # Create user
     user = User(
         email=user_data["email"],
         full_name=user_data["full_name"],
-        password=hashed_password,
+        hashed_password=hashed_pwd,
         role=user_data.get("role", "student"),
         status="active",
         phone=user_data.get("phone"),
@@ -313,8 +321,9 @@ async def create_user_admin(user_data: Dict) -> Dict:
             "full_name": user.full_name,
             "role": user.role,
             "status": user.status,
-            "generated_password": password if not user_data.get("password") else None,
-            "created_at": user.created_at.isoformat()
+            "generated_password": hash_password if not user_data.get("password") else None,
+            "created_at": user.created_at.isoformat(),
+            "message": f"Tài khoản {user.full_name} đã được tạo thành công" 
         }
     except Exception as e:
         raise HTTPException(
@@ -381,11 +390,13 @@ async def update_user_admin(user_id: str, update_data: Dict) -> Dict:
         
         return {
             "user_id": str(user.id),
-            "email": user.email,
-            "full_name": user.full_name,
-            "role": user.role,
-            "status": user.status,
-            "updated_at": user.updated_at.isoformat()
+            # "email": user.email,
+            # "full_name": user.full_name,
+            # "role": user.role,
+            # "status": user.status,
+            "message": f"Thông tin tài khoản đã được cập nhật thành công",
+            "updated_at": user.updated_at.isoformat(),
+            
         }
     except Exception as e:
         raise HTTPException(
@@ -426,26 +437,40 @@ async def delete_user_admin(user_id: str) -> Dict:
     if user.role == "student":
         active_enrollments = await Enrollment.find(
             Enrollment.user_id == user.id,
-            Enrollment.status.in_(["active", "completed"])
+            Enrollment.status == "active"
         ).count()
         
-        if active_enrollments > 0:
+        completed_enrollments = await Enrollment.find(
+            Enrollment.user_id == user.id,
+            Enrollment.status == "completed"
+        ).count()
+        
+        total_enrollments = active_enrollments + completed_enrollments
+
+        if total_enrollments > 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Không thể xóa user có {active_enrollments} enrollment đang hoạt động"
+                detail=f"Không thể xóa user có {total_enrollments} enrollment đang hoạt động"
             )
     
     # Check for active courses (for instructors)
     if user.role == "instructor":
-        active_courses = await Course.find(
-            Course.instructor_id == user.id,
-            Course.status.in_(["published", "draft"])
+        published_enrollments = await Enrollment.find(
+            Enrollment.user_id == user.id,
+            Enrollment.status == "published"
+        ).count()
+
+        draft_enrollments = await Enrollment.find(
+            Enrollment.user_id == user.id,
+            Enrollment.status == "draft"
         ).count()
         
-        if active_courses > 0:
+        total_active_courses = published_enrollments + draft_enrollments
+
+        if total_active_courses > 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Không thể xóa instructor có {active_courses} khóa học đang hoạt động"
+                detail=f"Không thể xóa instructor có {total_active_courses} khóa học đang hoạt động"
             )
     
     # Soft delete
@@ -453,11 +478,11 @@ async def delete_user_admin(user_id: str) -> Dict:
     user.updated_at = datetime.utcnow()
     
     try:
-        await user.save()
+        await user.delete()
         
         return {
             "user_id": str(user.id),
-            "message": "User đã được xóa thành công",
+            "message": "Tài khoản đã được xóa vĩnh viễn",
             "deleted_at": user.updated_at.isoformat()
         }
     except Exception as e:
@@ -522,13 +547,17 @@ async def get_courses_list_admin(
             Course.title.contains(search, case_insensitive=True),
             Course.description.contains(search, case_insensitive=True)
         ]
-        from beanie.operators import Or
-        query_conditions.append(Or(*search_conditions))
+        search_query = search_conditions[0]
+        for condition in search_conditions[1:]:
+            search_query |= condition
+        query_conditions.append(search_query)
     
     # Build final query
     if query_conditions:
-        from beanie.operators import And
-        query = Course.find(And(*query_conditions))
+        combined_query = query_conditions[0]
+        for condition in query_conditions[1:]:
+            combined_query &= condition
+        query = Course.find(combined_query)
     else:
         query = Course.find()
     
@@ -723,12 +752,10 @@ async def get_classes_list_admin(
             Class.class_name.contains(search, case_insensitive=True),
             Class.description.contains(search, case_insensitive=True)
         ]
-        from beanie.operators import Or
         query_conditions.append(Or(*search_conditions))
     
     # Build final query
     if query_conditions:
-        from beanie.operators import And
         query = Class.find(And(*query_conditions))
     else:
         query = Class.find()
