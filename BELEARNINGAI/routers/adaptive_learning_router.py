@@ -12,7 +12,7 @@ from services.adaptive_learning_service import adaptive_learning_service
 from routers.auth_router import get_current_user
 from models.models import User
 
-router = APIRouter(prefix="/api/v1/adaptive-learning", tags=["Adaptive Learning"])
+router = APIRouter(prefix="/adaptive-learning", tags=["Adaptive Learning"])
 
 
 # ============================================================================
@@ -394,7 +394,7 @@ async def track_lesson_completion(
 
 
 @router.post(
-    "/accept-adjustment/{enrollment_id}",
+    "/enrollment/{enrollment_id}/accept-adjustment",
     summary="User chấp nhận đề xuất điều chỉnh"
 )
 async def accept_adjustment(

@@ -93,7 +93,7 @@ class AdaptiveLearningService:
                 
                 # Tính thời gian tiết kiệm
                 for lesson in module.lessons:
-                    time_saved_hours += lesson.estimated_duration_minutes / 60.0
+                    time_saved_hours += lesson.duration_minutes / 60.0
                 
                 # Lưu thông tin skip
                 skipped_modules_data.append({
@@ -352,7 +352,7 @@ class AdaptiveLearningService:
 
             # Tính estimated time
             estimated_hours = sum(
-                lesson.estimated_duration_minutes for lesson in module.lessons
+                lesson.duration_minutes for lesson in module.lessons
             ) / 60.0
 
             adaptive_path.append({
@@ -490,7 +490,7 @@ class AdaptiveLearningService:
         """
         Phân tích performance của user trong 1 lesson
         """
-        estimated_time = lesson.estimated_duration_minutes * 60  # Convert to seconds
+        estimated_time = lesson.duration_minutes * 60  # Convert to seconds
         actual_time = completion_data.get("time_spent_seconds", 0)
 
         # Tính speed ratio
@@ -613,7 +613,7 @@ class AdaptiveLearningService:
                 all_lessons.append({
                     "lesson_id": str(lesson.id),
                     "lesson_title": lesson.title,
-                    "estimated_hours": lesson.estimated_duration_minutes / 60.0,
+                    "estimated_hours": lesson.duration_minutes / 60.0,
                     "module_title": module.title
                 })
 
