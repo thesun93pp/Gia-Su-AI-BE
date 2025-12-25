@@ -5,7 +5,7 @@ Naming: snake_case theo Python convention
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from beanie import Document, Indexed
 from pydantic import Field, EmailStr, BaseModel
 import uuid
@@ -346,7 +346,19 @@ class Enrollment(Document):
     enrolled_at: datetime = Field(default_factory=datetime.utcnow, description="Thời gian đăng ký")
     last_accessed_at: Optional[datetime] = Field(None, description="Lần truy cập cuối")
     completed_at: Optional[datetime] = Field(None, description="Thời gian hoàn thành khóa học")
-    
+
+    # Adaptive Learning Fields (NEW)
+    adaptive_learning_enabled: bool = Field(default=False, description="Có bật adaptive learning không")
+    skipped_modules: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Danh sách modules đã skip qua assessment. Format: [{module_id, skip_reason, skipped_at, assessment_session_id}]"
+    )
+    recommended_start_module_id: Optional[str] = Field(None, description="Module được đề xuất bắt đầu học")
+    learning_path_decisions: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Quyết định adaptive path cho từng module. Format: [{module_id, decision, reason, proficiency_score}]"
+    )
+
     class Settings:
         name = "enrollments"
         indexes = [
@@ -618,7 +630,25 @@ class Progress(Document):
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
+
+    # Adaptive Learning Fields (NEW)
+    auto_skipped_lessons: List[str] = Field(
+        default_factory=list,
+        description="Danh sách lesson_id đã auto-skip (không phải user tự skip)"
+    )
+    learning_path_type: str = Field(
+        default="sequential",
+        description="Loại lộ trình: sequential (tuần tự) | adaptive (thích ứng) | custom (tùy chỉnh)"
+    )
+    adjustment_history: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Lịch sử điều chỉnh adaptive. Format: [{adjusted_at, adjustment_type, reason, actions_taken, user_accepted}]"
+    )
+    learning_behavior_metrics: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Metrics về hành vi học tập. Format: {avg_speed_ratio, avg_attempts, pattern_type, last_pattern_check}"
+    )
+
     class Settings:
         name = "progress"
         indexes = [

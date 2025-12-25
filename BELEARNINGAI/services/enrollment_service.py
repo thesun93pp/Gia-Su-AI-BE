@@ -408,16 +408,37 @@ async def update_lesson_progress(
     progress.updated_at = datetime.utcnow()
     
     await progress.save()
-    
+
     # Đồng bộ với enrollment
     await update_enrollment_progress(
         enrollment.id,
         progress_percent=progress.overall_progress_percent,
         completed_lessons=[
-            e["lesson_id"] for e in progress.lessons_progress 
+            e["lesson_id"] for e in progress.lessons_progress
             if e.get("status") == "completed"
         ]
     )
+
+    # ADAPTIVE LEARNING: Trigger tracking nếu lesson completed
+    if status == "completed" and enrollment.adaptive_learning_enabled:
+        try:
+            from services.adaptive_learning_service import adaptive_learning_service
+
+            # Track và check adjustment (không block nếu fail)
+            await adaptive_learning_service.track_and_adjust(
+                user_id=user_id,
+                course_id=course_id,
+                lesson_id=lesson_id,
+                completion_data={
+                    "time_spent_seconds": time_spent_seconds,
+                    "quiz_score": lesson_entry.get("quiz_score") if lesson_entry else None,
+                    "attempts": lesson_entry.get("attempts", 1) if lesson_entry else 1,
+                    "completed_at": datetime.utcnow()
+                }
+            )
+        except Exception as e:
+            # Log error nhưng không fail request
+            print(f"Adaptive learning tracking error: {e}")
     
     return progress
 

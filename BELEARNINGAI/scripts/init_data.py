@@ -17,8 +17,8 @@ import random
 
 # Thêm đường dẫn gốc của dự án vào sys.path
 import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 from config.config import get_settings
