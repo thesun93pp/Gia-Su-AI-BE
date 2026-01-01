@@ -51,6 +51,7 @@ class EmbeddedLesson(BaseModel):
     audio_url: Optional[str] = None  # URL audio file (mp3, wav, ogg)
     resources: List[dict] = Field(default_factory=list)
     learning_objectives: List[str] = Field(default_factory=list, description="Mục tiêu học tập của lesson")
+    simulation_html: Optional[str] = None
     quiz_id: Optional[str] = None
     is_published: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)

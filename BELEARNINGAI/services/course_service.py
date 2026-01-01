@@ -299,7 +299,8 @@ async def add_lesson_to_module(
     order: int,
     content: str = "",
     content_type: str = "text",
-    duration_minutes: int = 0
+    duration_minutes: int = 0,
+    simulation_html: Optional[str] = None
 ) -> Optional[Course]:
     """
     Thêm lesson vào module
@@ -312,6 +313,7 @@ async def add_lesson_to_module(
         content: Nội dung
         content_type: Loại nội dung
         duration_minutes: Thời lượng
+        simulation_html: Nội dung HTML mô phỏng
         
     Returns:
         Course document đã update hoặc None
@@ -337,7 +339,8 @@ async def add_lesson_to_module(
                 order=order,
                 content=content,
                 content_type=content_type,
-                duration_minutes=duration_minutes
+                duration_minutes=duration_minutes,
+                simulation_html=simulation_html
             )
             module.lessons.append(new_lesson)
             break
@@ -353,7 +356,8 @@ async def update_lesson_in_module(
     lesson_id: str,
     title: Optional[str] = None,
     content: Optional[str] = None,
-    video_url: Optional[str] = None
+    video_url: Optional[str] = None,
+    simulation_html: Optional[str] = None
 ) -> Optional[Course]:
     """
     Cập nhật lesson trong module
@@ -363,6 +367,7 @@ async def update_lesson_in_module(
         module_id: ID của module
         lesson_id: ID của lesson
         title, content, video_url: Fields cần update
+        simulation_html: Nội dung HTML mô phỏng
         
     Returns:
         Course document đã update hoặc None
@@ -390,6 +395,8 @@ async def update_lesson_in_module(
                         lesson.content = content
                     if video_url is not None:
                         lesson.video_url = video_url
+                    if simulation_html is not None:
+                        lesson.simulation_html = simulation_html
                     break
     
     course.updated_at = datetime.utcnow()
@@ -802,7 +809,8 @@ async def create_course_admin(
     preview_video_url: Optional[str] = None,
     prerequisites: List[str] = None,
     learning_outcomes: List[dict] = None,
-    status: str = "draft"
+    status: str = "draft",
+    modules: Optional[List[dict]] = None,
 ) -> dict:
     """
     4.2.3: Tạo khóa học chính thức (Admin)
@@ -821,10 +829,45 @@ async def create_course_admin(
         prerequisites: List yêu cầu kiến thức
         learning_outcomes: List mục tiêu học tập
         status: draft|published
+        modules: List of modules to be created with the course
         
     Returns:
         Dict với course_id, title, status, created_by, message
     """
+    embedded_modules = []
+    total_lessons = 0
+    total_duration_minutes = 0
+
+    if modules:
+        for module_data in modules:
+            module_lessons = []
+            module_duration = 0
+            if "difficulty_level" in module_data:
+                module_data["difficulty"] = module_data.pop("difficulty_level")
+            if "resource" in module_data:
+                module_data["resources"] = module_data.pop("resource")
+
+            if module_data.get("lesson"):
+                for lesson_data in module_data["lesson"]:
+                    if "resource" in lesson_data:
+                        lesson_data["resources"] = lesson_data.pop("resource")
+                    new_lesson = EmbeddedLesson(**lesson_data)
+                    module_lessons.append(new_lesson)
+                    module_duration += new_lesson.duration_minutes
+            
+            module_data.pop("lesson", None) # Remove lesson from module_data to avoid validation error
+            new_module = EmbeddedModule(**module_data, lessons=module_lessons)
+            
+            # Recalculate totals for the module
+            new_module.total_lessons = len(module_lessons)
+            new_module.total_duration_minutes = module_duration
+            
+            embedded_modules.append(new_module)
+            
+            # Update course totals
+            total_lessons += new_module.total_lessons
+            total_duration_minutes += new_module.estimated_hours * 60 # Convert hours to minutes for consistency
+
     course = Course(
         title=title,
         description=description,
@@ -838,11 +881,10 @@ async def create_course_admin(
         prerequisites=prerequisites or [],
         learning_outcomes=learning_outcomes or [],
         status=status,
-        # Thêm các trường bắt buộc còn thiếu
-        modules=[],
-        total_modules=0,
-        total_lessons=0,
-        total_duration_minutes=0,
+        modules=embedded_modules,
+        total_modules=len(embedded_modules),
+        total_lessons=total_lessons,
+        total_duration_minutes=total_duration_minutes,
         enrollment_count=0,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow()
@@ -850,7 +892,7 @@ async def create_course_admin(
     
     await course.insert()
     
-    return {
+    response = {
         "course_id": str(course.id),
         "title": course.title,
         "status": course.status,
@@ -859,6 +901,8 @@ async def create_course_admin(
         "created_at": course.created_at,
         "message": "Khóa học chính thức đã được tạo thành công"
     }
+    
+    return response
 
 
 async def update_course_admin(
@@ -932,13 +976,15 @@ async def update_course_admin(
     course.updated_at = datetime.utcnow()
     await course.save()
     
-    return {
+    response = {
         "course_id": str(course.id),
         "title": course.title,
         "status": course.status,
         "updated_at": course.updated_at,
         "message": "Khóa học đã được cập nhật thành công"
     }
+    
+    return response
 
 
 async def delete_course_admin(course_id: str) -> dict:
@@ -1018,4 +1064,6 @@ async def delete_course_admin(course_id: str) -> dict:
         "impact": impact,
         "message": "Khóa học đã được xóa vĩnh viễn khỏi hệ thống"
     }
+
+
 

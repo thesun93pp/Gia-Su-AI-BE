@@ -1080,7 +1080,11 @@ async def update_course_admin(course_id: str, update_data: Dict) -> Dict:
         )
     
     # Update allowed fields
-    allowed_fields = ["title", "description", "category", "level", "status"]
+    allowed_fields = [
+        "title", "description", "category", "level", "status",
+        "language", "thumbnail_url", "preview_video_url",
+        "prerequisites", "learning_outcomes"
+    ]
     
     for field, value in update_data.items():
         if field in allowed_fields:
@@ -1093,6 +1097,8 @@ async def update_course_admin(course_id: str, update_data: Dict) -> Dict:
         
         return {
             "course_id": str(course.id),
+            "title": course.title,
+            "status": course.status,
             "message": "Khóa học đã được cập nhật",
             "updated_at": course.updated_at.isoformat()
         }

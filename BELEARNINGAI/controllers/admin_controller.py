@@ -485,47 +485,43 @@ async def handle_create_course_admin(
     current_user: Dict
 ) -> AdminCourseCreateResponse:
     """
-    4.2.3: Tạo khóa học chính thức (public course)
-
-    Args:
-        course_data: Dữ liệu khóa học mới
-        current_user: Dict chứa thông tin admin từ JWT
-
-    Returns:
-        AdminCourseCreateResponse với thông tin khóa học mới
+    4.2.3: Tạo khóa học chính thức (Admin)
+    Gọi hàm create_course_admin từ service với tất cả tham số
     """
     try:
+        # Validate admin
         if current_user.get("role") != "admin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Chỉ admin mới có quyền tạo khóa học chính thức"
+                detail="Only admins can create courses"
             )
-
-        # Lấy admin_id từ current_user
-        admin_id = current_user.get("user_id")
-
-        # Gọi course_service.create_course_admin với đầy đủ tham số
-        created_course = await course_service.create_course_admin(
-            admin_id=admin_id,
+        
+        learning_outcomes_data = [outcome.dict() for outcome in course_data.learning_outcomes] if course_data.learning_outcomes else []
+        modules_data = [module.dict() for module in course_data.modules] if course_data.modules else []
+        
+        # Tạo khóa học
+        result = await course_service.create_course_admin(
+            admin_id=current_user.get("user_id"),
             title=course_data.title,
             description=course_data.description,
             category=course_data.category,
             level=course_data.level,
-            language=course_data.language,
             thumbnail_url=course_data.thumbnail_url,
             preview_video_url=course_data.preview_video_url,
             prerequisites=course_data.prerequisites,
-            learning_outcomes=course_data.learning_outcomes,
-            status=course_data.status
+            learning_outcomes=learning_outcomes_data,
+            status=course_data.status,
+            modules=modules_data
         )
-        return AdminCourseCreateResponse(**created_course)
-
+        
+        return AdminCourseCreateResponse(**result)
+        
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Lỗi khi tạo khóa học: {str(e)}"
+            detail=str(e)
         )
 
 
@@ -552,7 +548,9 @@ async def handle_update_course_admin(
                 detail="Chỉ admin mới có quyền chỉnh sửa khóa học"
             )
         
-        updated_course = await admin_service.update_course_admin(course_id, course_data.dict(exclude_unset=True))
+        update_data = course_data.dict(exclude_unset=True)
+
+        updated_course = await admin_service.update_course_admin(course_id, update_data)
         return AdminCourseUpdateResponse(**updated_course)
         
     except HTTPException:

@@ -39,7 +39,7 @@ notepad .env  # Windows
 **Minimum required:**
 ```env
 MONGODB_URL=mongodb://localhost:27017
-MONGODB_DATABASE=belearning_db
+MONGODB_DATABASE=ai_learning_app
 GOOGLE_API_KEY=your-google-ai-api-key-here
 JWT_SECRET_KEY=any-random-string-for-development
 ```

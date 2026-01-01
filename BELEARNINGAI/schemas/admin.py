@@ -181,6 +181,46 @@ class AdminDashboardResponse(BaseModel):
 # ADMIN COURSE MANAGEMENT SCHEMAS (Section 4.2)
 # ============================================================================
 
+class LearningOutcome(BaseModel):
+    description: str = Field(..., description="Mô tả kết quả học tập đạt được")
+    skill_tag: str = Field(..., description="Skill tag dùng cho đánh giá & lộ trình")
+
+class AdminModuleCreate(BaseModel):
+    title: str = Field(..., description="Tiêu đề module")
+    description: str = Field(..., description="Mô tả module")
+    order: int
+    difficulty_level: str = Field(..., description="Beginner|Intermediate|Advanced")      
+    estimated_hours: float
+    learning_outcomes: List[LearningOutcome] = Field(default_factory=list)
+    prerequisites: List[str] = Field(default_factory=list)
+    resource: Optional[List['AdminResourceCreate']] = None
+    lesson: Optional[List['AdminLessonCreate']] = None
+
+
+class AdminLessonCreate(BaseModel):
+    title: str = Field(..., description="Tiêu đề bài học")
+    description: str = Field(..., alias="desciption", description="Mô tả bài học")
+    order: int
+    content: str = Field(..., description="Nội dung bài học")
+    content_type: str = Field(..., description="video|article|quiz")
+    duration_minutes: int
+    video_url: Optional[str] = None
+    audio_url: Optional[str] = None
+    simulation_html: Optional[str] = Field(None, description="Nội dung HTML của simulation/mô phỏng thực hành")
+    resource: Optional[List['AdminResourceCreate']] = None
+    learning_objectives: List[str] = Field(default_factory=list)
+    quiz_id: Optional[str] = Field(None, description="UUID của quiz nếu content_type là quiz")
+    is_published: bool = Field(..., description="Bài học đã được xuất bản hay chưa")
+
+class AdminResourceCreate(BaseModel):
+    type: str = Field(..., description="document|link|video")
+    title: str = Field(..., description="Tiêu đề tài liệu")
+    description: Optional[str] = None
+    url: Optional[str] = Field(None, description="URL tài liệu") 
+    file_size_byte: Optional[float] = None
+    is_dowloadable: bool = Field(..., description="Có thể tải về hay không")
+
+
 class CourseAuthor(BaseModel):
     user_id: str = Field(..., description="UUID")
     full_name: str
@@ -240,7 +280,7 @@ class AdminCourseDetailResponse(BaseModel):
     modules: List[ModuleSummary]
     total_duration_minutes: int
     prerequisites: List[str]
-    learning_outcomes: List[dict]
+    learning_outcomes: List[LearningOutcome]
     analytics: CourseAnalytics
     created_at: datetime
     updated_at: datetime
@@ -248,15 +288,18 @@ class AdminCourseDetailResponse(BaseModel):
 
 class AdminCourseCreateRequest(BaseModel):
     title: str = Field(..., min_length=5, max_length=200)
-    description: str = Field(..., min_length=20, max_length=2000)
+    description: str = Field(..., min_length=5, max_length=2000)
     category: str
     level: str = Field(..., description="Beginner|Intermediate|Advanced")
-    language: str = Field(default="vi")
     thumbnail_url: Optional[str] = None
     preview_video_url: Optional[str] = None
+    language: str = Field(default="vi", description="vi|en")
+    status: str = Field(default="published", description="draft|published")
+    learning_outcomes: List[LearningOutcome] = Field(default_factory=list)
     prerequisites: List[str] = Field(default_factory=list)
-    learning_outcomes: List[dict] = Field(default_factory=list)
-    status: str = Field(default="draft", description="draft|published")
+    modules: List[AdminModuleCreate] = Field(default_factory=list)
+    
+    
 
 
 class AdminCourseCreateResponse(BaseModel):
@@ -267,6 +310,7 @@ class AdminCourseCreateResponse(BaseModel):
     created_by: str = Field(..., description="Admin user_id")
     created_at: datetime
     message: str
+   
 
 
 class AdminCourseUpdateRequest(BaseModel):
@@ -278,9 +322,9 @@ class AdminCourseUpdateRequest(BaseModel):
     thumbnail_url: Optional[str] = None
     preview_video_url: Optional[str] = None
     prerequisites: Optional[List[str]] = None
-    learning_outcomes: Optional[List[dict]] = None
+    learning_outcomes: List[LearningOutcome] = Field(default_factory=list)
     status: Optional[str] = Field(None, description="draft|published|archived")
-
+   
 
 class AdminCourseUpdateResponse(BaseModel):
     course_id: str = Field(..., description="UUID")
@@ -361,3 +405,5 @@ class AdminClassDetailResponse(BaseModel):
     created_at: datetime = Field(..., description="Ngày tạo lớp")
     start_date: datetime = Field(..., description="Thời gian bắt đầu")
     end_date: datetime = Field(..., description="Thời gian kết thúc")
+
+
