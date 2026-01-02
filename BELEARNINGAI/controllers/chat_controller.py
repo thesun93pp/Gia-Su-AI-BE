@@ -68,7 +68,37 @@ async def handle_send_chat_message(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Bạn cần đăng ký khóa học để sử dụng chatbot"
             )
-    
+
+    #Validate image nếu có
+    if request.image_base64:
+        # Kiểm tra mime type
+        allowed_types = ["image/png", "image/jpeg", "image/webp", "image/gif"]
+        if not request.image_mime_type or request.image_mime_type not in allowed_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Image type không hợp lệ. Chỉ chấp nhận: {', '.join(allowed_types)}"
+            )
+
+        # Kiểm tra kích thước base64 string
+        # Base64 string length ≈ 1.33 × file size
+        # 4MB file ≈ 5.3MB base64
+        max_base64_size = 5_500_000  # ~4MB file
+        if len(request.image_base64) > max_base64_size:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ảnh quá lớn. Vui lòng chọn ảnh nhỏ hơn 4MB"
+            )
+
+        # Validate base64 format (basic check)
+        try:
+            import base64
+            base64.b64decode(request.image_base64, validate=True)
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Định dạng base64 không hợp lệ"
+            )
+
     # Tìm hoặc tạo conversation
     if request.conversation_id:
         conversation = await Conversation.find_one(
@@ -93,20 +123,24 @@ async def handle_send_chat_message(
         )
         await conversation.insert()
     
-    # Lưu user message
+    # Lưu user message (với ảnh nếu có)
     user_message = {
         "id": generate_uuid(),
         "role": "user",
         "content": request.question,
-        "timestamp": datetime.utcnow()
+        "timestamp": datetime.utcnow(),
+        "image_base64": request.image_base64, 
+        "image_mime_type": request.image_mime_type
     }
     conversation.messages.append(user_message)
-    
-    # Gọi AI với course context
+
+    # Gọi AI với course context (và ảnh nếu có)
     ai_response_text = await chat_with_course_context(
         course_id=course_id,
         question=request.question,
-        conversation_history=conversation.messages
+        conversation_history=conversation.messages,
+        image_base64=request.image_base64, 
+        image_mime_type=request.image_mime_type 
     )
     
     # Lưu AI response
@@ -128,8 +162,10 @@ async def handle_send_chat_message(
         answer=ai_response_text,
         timestamp=ai_message["timestamp"],
         sources=[],
-        related_lessons=[]
-        # tokens_used is optional, will be added when AI service is integrated
+        related_lessons=[],
+        has_image=bool(request.image_base64), 
+        image_analyzed=bool(request.image_base64) 
+        
     )
 
 

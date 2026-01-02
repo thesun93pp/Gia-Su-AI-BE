@@ -542,8 +542,8 @@ async def chat_with_course_context(
     course_id: str,
     question: str,
     conversation_history: Optional[List[Dict]] = None,
-    image_base64: Optional[str] = None,  # ✨ NEW: Image support
-    image_mime_type: Optional[str] = None  # ✨ NEW: Image MIME type
+    image_base64: Optional[str] = None,  #
+    image_mime_type: Optional[str] = None  
 ) -> str:
     """
     Chatbot trả lời câu hỏi dựa trên context của khóa học
@@ -579,30 +579,66 @@ async def chat_with_course_context(
             for msg in conversation_history[-5:]:
                 role = msg.get("role", "user")
                 content = msg.get("content", "")
-                history_text += f"{role}: {content}\n"
-        
-        # Tạo prompt
-        prompt = f"""
-Bạn là trợ lý AI hỗ trợ học tập cho khóa học sau:
+                has_img = " [có ảnh]" if msg.get("image_base64") else ""
+                history_text += f"{role}: {content}{has_img}\n"
 
-THÔNG TIN KHÓA HỌC:
-{course_context}
+        # Tạo prompt với image instruction nếu có
+        image_instruction = ""
+        if image_base64:
+            image_instruction = """
+            [HỌC VIÊN ĐÃ GỬI KÈM ẢNH]
+            Hãy phân tích kỹ nội dung trong ảnh:
+            - Nếu là code: Tìm lỗi, giải thích, đề xuất sửa
+            - Nếu là diagram/flowchart: Giải thích luồng, ý nghĩa
+            - Nếu là screenshot lỗi: Phân tích nguyên nhân, hướng dẫn fix
+            - Nếu là bài tập: Hướng dẫn cách làm, giải thích từng bước
+            """
 
-LỊCH SỬ HỘI THOẠI:
-{history_text}
+        prompt_text = f"""
+        Bạn là trợ lý AI hỗ trợ học tập cho khóa học sau:
 
-CÂU HỎI MỚI TỪ HỌC VIÊN:
-{question}
+        THÔNG TIN KHÓA HỌC:
+        {course_context}
 
-Hãy trả lời câu hỏi dựa trên thông tin khóa học. Trả lời bằng tiếng Việt, ngắn gọn và dễ hiểu.
-Nếu câu hỏi không liên quan đến khóa học, hãy lịch sự nhắc nhở học viên tập trung vào nội dung khóa học.
-"""
-        
-        response = model.generate_content(prompt)
+        LỊCH SỬ HỘI THOẠI:
+        {history_text}
+
+        {image_instruction}
+
+        CÂU HỎI MỚI TỪ HỌC VIÊN:
+        {question}
+
+        Hãy trả lời câu hỏi dựa trên thông tin khóa học. Trả lời bằng tiếng Việt, ngắn gọn và dễ hiểu.
+        Nếu câu hỏi không liên quan đến khóa học, hãy lịch sự nhắc nhở học viên tập trung vào nội dung khóa học.
+        """
+
+        #Multimodal request nếu có ảnh
+        if image_base64 and image_mime_type:
+            logger.info(f"Processing multimodal request with image type: {image_mime_type}")
+
+            # Tạo multimodal content parts
+            parts = [
+                {"text": prompt_text},
+                {
+                    "inline_data": {
+                        "mime_type": image_mime_type,
+                        "data": image_base64
+                    }
+                }
+            ]
+
+            response = model.generate_content(parts)
+        else:
+            # Text-only request (giữ nguyên)
+            response = model.generate_content(prompt_text)
+
         return response.text.strip()
     
     except Exception as e:
         logger.error(f"Error in chat_with_course_context: {str(e)}", exc_info=True)
+        #error message for image errors
+        if image_base64 and ("image" in str(e).lower() or "mime" in str(e).lower()):
+            return "Xin lỗi, tôi không thể xử lý ảnh này. Vui lòng thử ảnh khác hoặc mô tả vấn đề bằng text."
         return "Xin lỗi, tôi không thể trả lời câu hỏi này lúc này. Vui lòng thử lại sau."
 
 
