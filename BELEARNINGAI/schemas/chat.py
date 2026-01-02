@@ -15,19 +15,39 @@ from typing import List, Optional, Literal
 
 class ChatMessageRequest(BaseModel):
     """Request schema cho chat message - Section 2.6.1"""
-    question: str = Field(..., description="Câu hỏi của học viên")
+    question: str = Field(..., description="Câu hỏi của học viên", examples=["Python list comprehension là gì?"])
     conversation_id: Optional[str] = Field(None, description="UUID conversation để duy trì context")
     context_type: Optional[Literal["lesson", "module", "general"]] = Field("general", description="Loại context")
 
     #Image support
     image_base64: Optional[str] = Field(
         None,
-        description="Ảnh dạng base64 (không bao gồm prefix 'data:image/...')"
+        description="Ảnh dạng base64 (không bao gồm prefix 'data:image/...')",
+        examples=["iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="]
     )
     image_mime_type: Optional[str] = Field(
         None,
-        description="MIME type: image/png, image/jpeg, image/webp, image/gif"
+        description="MIME type: image/png, image/jpeg, image/webp, image/gif",
+        examples=["image/png"]
     )
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "question": "Python list comprehension là gì?",
+                    "conversation_id": None,
+                    "context_type": "general"
+                },
+                {
+                    "question": "Code này bị lỗi gì? Giải thích và sửa giúp tôi",
+                    "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "context_type": "lesson",
+                    "image_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
+                    "image_mime_type": "image/png"
+                }
+            ]
+        }
 
 # ============================================================================
 # RESPONSE SCHEMAS - Section 2.6.1
@@ -62,6 +82,49 @@ class ChatMessageResponse(BaseModel):
     #Image support
     has_image: bool = Field(default=False, description="Message có kèm ảnh không")
     image_analyzed: bool = Field(default=False, description="AI đã phân tích ảnh chưa")
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "message_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+                    "question": "Python list comprehension là gì?",
+                    "answer": "List comprehension là cú pháp ngắn gọn để tạo list mới từ iterable có sẵn...",
+                    "sources": [],
+                    "related_lessons": [],
+                    "timestamp": "2024-12-26T10:30:00Z",
+                    "tokens_used": 150,
+                    "has_image": False,
+                    "image_analyzed": False
+                },
+                {
+                    "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "message_id": "7ba7b810-9dad-11d1-80b4-00c04fd430c9",
+                    "question": "Code này bị lỗi gì?",
+                    "answer": "Tôi thấy trong ảnh code của bạn có lỗi ở dòng 5: thiếu dấu ':' sau if statement...",
+                    "sources": [
+                        {
+                            "type": "lesson",
+                            "id": "lesson-123",
+                            "title": "Python Control Flow",
+                            "excerpt": "If statements require a colon..."
+                        }
+                    ],
+                    "related_lessons": [
+                        {
+                            "lesson_id": "lesson-123",
+                            "title": "Python Control Flow",
+                            "url": "/courses/python-101/lessons/lesson-123"
+                        }
+                    ],
+                    "timestamp": "2024-12-26T10:35:00Z",
+                    "tokens_used": 250,
+                    "has_image": True,
+                    "image_analyzed": True
+                }
+            ]
+        }
 
 
 # ============================================================================

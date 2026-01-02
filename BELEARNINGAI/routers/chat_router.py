@@ -31,15 +31,53 @@ router = APIRouter(prefix="/chat", tags=["Chat AI"])
     "/course/{course_id}",
     response_model=ChatMessageResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Gửi câu hỏi cho AI chatbot",
-    description="Chatbot trả lời dựa trên nội dung khóa học (RAG), kèm nguồn lesson liên quan"
+    summary="Gửi câu hỏi cho AI chatbot (hỗ trợ text + image)",
+    description="""
+    **Chatbot AI hỗ trợ multimodal (text + image)**
+
+    Học viên có thể:
+    - Hỏi bất kỳ câu hỏi nào liên quan đến khóa học
+    - Gửi kèm ảnh (screenshot code, diagram, lỗi, bài tập)
+    - AI sẽ phân tích cả text và image để trả lời
+
+    **Tính năng:**
+    - ✅ RAG (Retrieval Augmented Generation) dựa trên nội dung khóa học
+    - ✅ Multimodal: Hỗ trợ gửi ảnh kèm câu hỏi
+    - ✅ Context-aware: Duy trì ngữ cảnh hội thoại
+    - ✅ Source citation: Trích dẫn nguồn từ lessons
+
+    **Image support:**
+    - Formats: PNG, JPEG, WEBP, GIF
+    - Max size: 4MB
+    - Encoding: Base64 (không bao gồm prefix 'data:image/...')
+    - Use cases: Code debugging, diagram explanation, error analysis, exercise help
+
+    **Request body:**
+    - `question` (required): Câu hỏi của học viên
+    - `conversation_id` (optional): UUID để duy trì context
+    - `context_type` (optional): "lesson" | "module" | "general"
+    - `image_base64` (optional): Ảnh dạng base64
+    - `image_mime_type` (optional): MIME type của ảnh
+
+    **Response:**
+    - `answer`: Câu trả lời từ AI (markdown format)
+    - `sources`: Nguồn trích dẫn từ lessons
+    - `related_lessons`: Bài học liên quan
+    - `has_image`: Message có kèm ảnh không
+    - `image_analyzed`: AI đã phân tích ảnh chưa
+    """
 )
 async def send_chat_message(
     course_id: str,
     message_data: ChatMessageRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Section 2.6.1 - Gửi tin nhắn chat"""
+    """
+    Section 2.6.1 - Gửi tin nhắn chat (text + image)
+
+    Hỗ trợ multimodal: Học viên có thể gửi câu hỏi kèm ảnh,
+    AI sẽ phân tích cả text và image để trả lời.
+    """
     return await handle_send_chat_message(course_id, message_data, current_user)
 
 
