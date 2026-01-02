@@ -541,16 +541,21 @@ Lưu ý:
 async def chat_with_course_context(
     course_id: str,
     question: str,
-    conversation_history: Optional[List[Dict]] = None
+    conversation_history: Optional[List[Dict]] = None,
+    image_base64: Optional[str] = None,  # ✨ NEW: Image support
+    image_mime_type: Optional[str] = None  # ✨ NEW: Image MIME type
 ) -> str:
     """
     Chatbot trả lời câu hỏi dựa trên context của khóa học
-    
+    Hỗ trợ multimodal: text + image
+
     Args:
         course_id: ID của khóa học
         question: Câu hỏi từ user
         conversation_history: Lịch sử chat trước đó (optional)
-        
+        image_base64: Ảnh dạng base64 (optional)
+        image_mime_type: MIME type của ảnh (optional)
+
     Returns:
         Câu trả lời từ AI
     """

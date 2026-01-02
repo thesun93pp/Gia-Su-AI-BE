@@ -18,8 +18,16 @@ class ChatMessageRequest(BaseModel):
     question: str = Field(..., description="Câu hỏi của học viên")
     conversation_id: Optional[str] = Field(None, description="UUID conversation để duy trì context")
     context_type: Optional[Literal["lesson", "module", "general"]] = Field("general", description="Loại context")
-    image_base64: Optional[str] = None
-    image_mime_type: Optional[str] = None
+
+    # ✨ Image support
+    image_base64: Optional[str] = Field(
+        None,
+        description="Ảnh dạng base64 (không bao gồm prefix 'data:image/...')"
+    )
+    image_mime_type: Optional[str] = Field(
+        None,
+        description="MIME type: image/png, image/jpeg, image/webp, image/gif"
+    )
 
 # ============================================================================
 # RESPONSE SCHEMAS - Section 2.6.1
@@ -50,6 +58,10 @@ class ChatMessageResponse(BaseModel):
     related_lessons: List[RelatedLesson] = Field(default_factory=list, description="Bài học liên quan")
     timestamp: datetime = Field(..., description="Thời gian tạo message")
     tokens_used: Optional[int] = Field(None, description="Số tokens AI đã dùng (optional)")
+
+    # ✨ Image support
+    has_image: bool = Field(default=False, description="Message có kèm ảnh không")
+    image_analyzed: bool = Field(default=False, description="AI đã phân tích ảnh chưa")
 
 
 # ============================================================================
