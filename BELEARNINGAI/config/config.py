@@ -22,7 +22,8 @@ class Settings(BaseSettings):
     environment: str = Field(default="development", alias="ENVIRONMENT")
     debug: bool = Field(default=False, alias="DEBUG")
     testing: bool = Field(default=False, alias="TESTING")
-    
+    api_prefix: str = Field(default="/api/v1", alias="API_PREFIX")
+
     # Database Configuration
     # mongodb_url: str = Field(default="mongodb://localhost:27017", alias="MONGODB_URL")
     mongodb_url: str = Field(alias="MONGODB_URL")

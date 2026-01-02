@@ -22,6 +22,7 @@ from routers.analytics_router import router as analytics_router
 from routers.classes_router import router as classes_router
 from routers.search_router import router as search_router
 from routers.admin_router import router as admin_router
+from routers.adaptive_learning_router import router as adaptive_learning_router
 
 # Tạo api_router chính
 api_router = APIRouter()
@@ -62,3 +63,6 @@ api_router.include_router(search_router)
 
 # Group 4.1-4.4: Admin Management (18 endpoints)
 api_router.include_router(admin_router)
+
+# NEW: Adaptive Learning (5 endpoints)
+api_router.include_router(adaptive_learning_router)
