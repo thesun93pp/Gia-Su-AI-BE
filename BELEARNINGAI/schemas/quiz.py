@@ -6,7 +6,7 @@ Bao gồm: get detail, attempt, results, retake, create, update, delete, practic
 
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 
 class QuizDetailResponse(BaseModel):
@@ -43,6 +43,16 @@ class QuizAttemptResponse(BaseModel):
     attempt_number: int = Field(..., description="Lần thử thứ mấy")
     submitted_at: datetime
     message: str
+
+    # Module Assessment Review - chỉ có khi fail module assessment
+    lessons_to_review: Optional[List[Dict]] = Field(
+        None,
+        description="Danh sách lessons cần xem lại (chỉ có khi fail module assessment)"
+    )
+    skill_gaps_summary: Optional[Dict] = Field(
+        None,
+        description="Tóm tắt lỗ hổng kiến thức (chỉ có khi fail module assessment)"
+    )
 
 
 class QuestionResult(BaseModel):

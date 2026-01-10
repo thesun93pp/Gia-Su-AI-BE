@@ -150,3 +150,45 @@ async def generate_module_assessment(
 ):
     """Sinh quiz đánh giá tự động cho module bằng AI - returns Dict matching API_SCHEMA"""
     return await handle_generate_module_assessment(course_id, module_id, request, current_user)
+
+
+# ============================================================================
+# MODULE ASSESSMENT REVIEW - Lessons cần xem lại
+# ============================================================================
+
+@router.get(
+    "/enrollments/{enrollment_id}/lessons-to-review",
+    status_code=status.HTTP_200_OK,
+    summary="Danh sách lessons cần xem lại",
+    description="Lấy danh sách lessons cần review sau khi fail module assessment"
+)
+async def get_lessons_to_review(
+    enrollment_id: str,
+    include_reviewed: bool = False,
+    current_user: dict = Depends(get_current_user)
+):
+    """Lấy danh sách lessons cần review"""
+    from services.module_assessment_review_service import get_lessons_need_review
+    from schemas.module_assessment_review import LessonsToReviewResponse
+
+    result = await get_lessons_need_review(enrollment_id, include_reviewed)
+    return LessonsToReviewResponse(**result)
+
+
+@router.post(
+    "/enrollments/{enrollment_id}/lessons/{lesson_id}/mark-reviewed",
+    status_code=status.HTTP_200_OK,
+    summary="Đánh dấu lesson đã review",
+    description="Đánh dấu lesson đã được xem lại sau khi học viên review"
+)
+async def mark_lesson_reviewed(
+    enrollment_id: str,
+    lesson_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Đánh dấu lesson đã review"""
+    from services.module_assessment_review_service import mark_lesson_as_reviewed
+    from schemas.module_assessment_review import MarkReviewedResponse
+
+    result = await mark_lesson_as_reviewed(enrollment_id, lesson_id)
+    return MarkReviewedResponse(**result)

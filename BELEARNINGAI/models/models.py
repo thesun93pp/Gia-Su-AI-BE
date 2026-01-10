@@ -341,6 +341,12 @@ class Enrollment(Document):
     completed_modules: List[str] = Field(default_factory=list, description="Danh sách UUID modules đã hoàn thành")
     avg_quiz_score: Optional[float] = Field(None, description="Điểm quiz trung bình 0-100")
     total_time_spent_minutes: int = Field(default=0, description="Tổng thời gian học (phút)")
+
+    # Module Assessment Review - Lessons cần xem lại sau khi fail module assessment
+    lessons_need_review: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Lessons cần xem lại sau module assessment. Format: [{lesson_id, lesson_title, module_id, skill_gaps, wrong_questions, marked_at, reviewed, reviewed_at}]"
+    )
     
     # Timestamps
     enrolled_at: datetime = Field(default_factory=datetime.utcnow, description="Thời gian đăng ký")
