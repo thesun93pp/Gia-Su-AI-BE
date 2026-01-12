@@ -1,0 +1,389 @@
+{
+	"info": {
+		"name": "AI Learning Platform - Additional E2E Tests (Part 2)",
+		"description": "7 luồng E2E test bổ sung: E2E-16, E2E-19, E2E-20, E2E-22, E2E-23, E2E-24, E2E-25",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "E2E-16: Instructor View Quiz Attempts",
+			"item": [
+				{
+					"name": "Step 1: Get All Attempts",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Attempts retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"    var jsonData = pm.response.json();",
+								"    if (jsonData.length > 0) {",
+								"        pm.collectionVariables.set('review_attempt_id', jsonData[0].attempt_id);",
+								"    }",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{instructor_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/quiz/{{quiz_id}}/attempts", "host": ["{{base_url}}"], "path": ["api", "v1", "quiz", "{{quiz_id}}", "attempts"]}
+					}
+				},
+				{
+					"name": "Step 2: Get Attempt Detail",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Attempt detail retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{instructor_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/quiz/{{quiz_id}}/attempts/{{review_attempt_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "quiz", "{{quiz_id}}", "attempts", "{{review_attempt_id}}"]}
+					}
+				},
+				{
+					"name": "Step 3: Get Quiz Analytics",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Analytics retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{instructor_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/quiz/{{quiz_id}}/analytics", "host": ["{{base_url}}"], "path": ["api", "v1", "quiz", "{{quiz_id}}", "analytics"]}
+					}
+				}
+			]
+		},
+		{
+			"name": "E2E-19: Admin Manage Courses",
+			"item": [
+				{
+					"name": "Step 1: Get All Courses",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Courses retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{admin_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/admin/courses?skip=0&limit=20", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "courses"], "query": [{"key": "skip", "value": "0"}, {"key": "limit", "value": "20"}]}
+					}
+				},
+				{
+					"name": "Step 2: Create Course",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Course created', function () {",
+								"    pm.response.to.have.status(201);",
+								"    var jsonData = pm.response.json();",
+								"    pm.collectionVariables.set('admin_created_course_id', jsonData.course_id);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Authorization", "value": "Bearer {{admin_token}}"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Advanced ML\",\n  \"description\": \"ML course\",\n  \"category\": \"AI/ML\",\n  \"level\": \"Advanced\",\n  \"status\": \"draft\"\n}",
+							"options": {"raw": {"language": "json"}}
+						},
+						"url": {"raw": "{{base_url}}/api/v1/admin/courses", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "courses"]}
+					}
+				},
+				{
+					"name": "Step 3: Update Course",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Course updated', function () {",
+								"    pm.response.to.have.status(200);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "PATCH",
+						"header": [{"key": "Authorization", "value": "Bearer {{admin_token}}"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"published\"\n}",
+							"options": {"raw": {"language": "json"}}
+						},
+						"url": {"raw": "{{base_url}}/api/v1/admin/courses/{{admin_created_course_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "courses", "{{admin_created_course_id}}"]}
+					}
+				}
+			]
+		},
+		{
+			"name": "E2E-20: Admin Monitor Classes",
+			"item": [
+				{
+					"name": "Step 1: Get All Classes",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Classes retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{admin_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/admin/classes?status=active", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "classes"], "query": [{"key": "status", "value": "active"}]}
+					}
+				},
+				{
+					"name": "Step 2: Get Class Detail",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Class detail retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{admin_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/admin/classes/{{class_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "classes", "{{class_id}}"]}
+					}
+				},
+				{
+					"name": "Step 3: Get Users Growth",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Growth data retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{admin_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/admin/analytics/users-growth?period=90days", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "analytics", "users-growth"], "query": [{"key": "period", "value": "90days"}]}
+					}
+				}
+			]
+		},
+		{
+			"name": "E2E-22: Instructor Dashboard",
+			"item": [
+				{
+					"name": "Step 1: Get Dashboard",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Dashboard retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"    var jsonData = pm.response.json();",
+								"    pm.expect(jsonData).to.have.property('overview');",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{instructor_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/dashboard/instructor", "host": ["{{base_url}}"], "path": ["api", "v1", "dashboard", "instructor"]}
+					}
+				},
+				{
+					"name": "Step 2: Get Class Stats",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Class stats retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{instructor_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/analytics/instructor/class-stats?class_id={{class_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "analytics", "instructor", "class-stats"], "query": [{"key": "class_id", "value": "{{class_id}}"}]}
+					}
+				}
+			]
+		},
+		{
+			"name": "E2E-23: Admin Dashboard",
+			"item": [
+				{
+					"name": "Step 1: Get Admin Dashboard",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Admin dashboard retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"    var jsonData = pm.response.json();",
+								"    pm.expect(jsonData).to.have.property('system_stats');",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{admin_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/admin/dashboard", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "dashboard"]}
+					}
+				},
+				{
+					"name": "Step 2: Get System Health",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('System health OK', function () {",
+								"    pm.response.to.have.status(200);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{admin_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/analytics/admin/system-health", "host": ["{{base_url}}"], "path": ["api", "v1", "analytics", "admin", "system-health"]}
+					}
+				}
+			]
+		},
+		{
+			"name": "E2E-24: Search Functionality",
+			"item": [
+				{
+					"name": "Step 1: Search Courses",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Search works', function () {",
+								"    pm.response.to.have.status(200);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{student_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/search/courses?keyword=Python", "host": ["{{base_url}}"], "path": ["api", "v1", "search", "courses"], "query": [{"key": "keyword", "value": "Python"}]}
+					}
+				},
+				{
+					"name": "Step 2: Get Suggestions",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Suggestions retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{student_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/search/suggestions?partial=pytho", "host": ["{{base_url}}"], "path": ["api", "v1", "search", "suggestions"], "query": [{"key": "partial", "value": "pytho"}]}
+					}
+				}
+			]
+		},
+		{
+			"name": "E2E-25: Recommendation Engine",
+			"item": [
+				{
+					"name": "Step 1: Get Recommendations",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Recommendations retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"    var jsonData = pm.response.json();",
+								"    pm.expect(jsonData).to.have.property('recommended_courses');",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{student_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/recommendations/courses", "host": ["{{base_url}}"], "path": ["api", "v1", "recommendations", "courses"]}
+					}
+				},
+				{
+					"name": "Step 2: Assessment-based Recommendations",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Assessment recommendations retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{student_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/recommendations/from-assessment?session_id={{assessment_session_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "recommendations", "from-assessment"], "query": [{"key": "session_id", "value": "{{assessment_session_id}}"}]}
+					}
+				}
+			]
+		}
+	]
+}
