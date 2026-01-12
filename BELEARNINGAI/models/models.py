@@ -64,7 +64,7 @@ class EmbeddedModule(BaseModel):
     title: str
     description: str
     order: int
-    difficulty: str = "Basic"
+    difficulty: str = "easy"
     estimated_hours: float = 0
     learning_outcomes: List[dict] = Field(default_factory=list)
     prerequisites: List[str] = Field(default_factory=list, description="Module IDs tiên quyết")
@@ -223,7 +223,7 @@ class Module(Document):
     title: str = Field(..., description="Tên module")
     description: str = Field(..., description="Mô tả module")
     order: int = Field(..., description="Thứ tự module trong khóa học")
-    difficulty: str = Field(default="Basic", description="Độ khó: Basic|Intermediate|Advanced")
+    difficulty: str = Field(default="easy", description="Độ khó: easy|medium|hard")
     estimated_hours: float = Field(default=0, description="Thời gian học ước tính (giờ)")
     
     # Learning outcomes cho module - theo LearningOutcome schema

@@ -851,11 +851,7 @@ Trả về JSON với cấu trúc (CHỈ JSON THUẦN TÚY, KHÔNG CÓ TEXT KHÁ
             "title": "Tên module",
             "description": "Mô tả ngắn",
             "order": 1,
-<<<<<<< HEAD
-            "difficulty": "Basic|Intermediate|Advanced",
-=======
             "difficulty": "easy|medium|hard",
->>>>>>> 5fab9c4 (Tách API khóa học)
             "estimated_hours": 2,
             "learning_outcomes": [
                 {{
@@ -985,7 +981,7 @@ LƯU Ý:
                     "title": "Module 1: Giới thiệu",
                     "description": "Module giới thiệu khóa học",
                     "order": 1,
-                    "difficulty": "Basic",
+                    "difficulty": "easy",
                     "estimated_hours": 2,
                     "learning_outcomes": [
                         {

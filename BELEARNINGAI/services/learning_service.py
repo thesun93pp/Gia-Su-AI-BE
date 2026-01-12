@@ -398,9 +398,7 @@ async def get_lesson_content(
         "content_type": getattr(lesson, 'content_type', 'text'),
         "text_content": getattr(lesson, 'content', ''),
         "video_info": video_info,
-
         "simulation_html": getattr(lesson, 'simulation_html', None),
-
         "attachments": attachments,
         "learning_objectives": learning_objectives,
         "resources": resources,

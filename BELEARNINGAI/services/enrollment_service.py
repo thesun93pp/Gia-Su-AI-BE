@@ -414,7 +414,6 @@ async def update_lesson_progress(
         enrollment.id,
         progress_percent=progress.overall_progress_percent,
         completed_lessons=[
-
             e["lesson_id"] for e in progress.lessons_progress
             if e.get("status") == "completed"
         ]

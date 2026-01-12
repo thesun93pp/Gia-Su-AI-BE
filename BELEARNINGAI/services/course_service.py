@@ -5,7 +5,7 @@ Tuân thủ: CHUCNANG.md Section 2.3, 2.5, 3.1
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Any
 from models.models import Course, Module, Lesson, Enrollment, EmbeddedModule, EmbeddedLesson
 from beanie.operators import In, RegEx, Or
 
@@ -324,7 +324,7 @@ async def delete_module_from_course(course_id: str, module_id: str) -> Optional[
 async def add_lesson_to_module(
     course_id: str,
     module_id: str,
-    lesson_data
+    lesson_data: Any
 ) -> Optional[dict]:
     """
     Thêm lesson vào module
@@ -893,15 +893,15 @@ async def create_course_admin(
             if "resource" in module_data:
                 module_data["resources"] = module_data.pop("resource")
 
-            if module_data.get("lesson"):
-                for lesson_data in module_data["lesson"]:
+            if module_data.get("lessons"):
+                for lesson_data in module_data["lessons"]:
                     if "resource" in lesson_data:
                         lesson_data["resources"] = lesson_data.pop("resource")
                     new_lesson = EmbeddedLesson(**lesson_data)
                     module_lessons.append(new_lesson)
                     module_duration += new_lesson.duration_minutes
             
-            module_data.pop("lesson", None)
+            module_data.pop("lessons", None)
             new_module = EmbeddedModule(**module_data, lessons=module_lessons)
             
             # Recalculate totals for the module
@@ -1128,6 +1128,3 @@ async def delete_course_admin(course_id: str) -> dict:
         "impact": impact,
         "message": "Khóa học đã được xóa vĩnh viễn khỏi hệ thống"
     }
-
-
-

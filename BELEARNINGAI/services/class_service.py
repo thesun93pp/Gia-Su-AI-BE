@@ -428,8 +428,6 @@ async def join_class_with_code(user_id: str, invite_code: str) -> Dict:
     cls = await Class.find_one(Class.invite_code == invite_code.upper())
     
 
-    cls = await Class.find_one(Class.invite_code == invite_code.upper())    
-
     if not cls:
         raise ValueError("Mã mời không hợp lệ")
     
