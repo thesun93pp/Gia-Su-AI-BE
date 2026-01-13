@@ -100,6 +100,7 @@ class QuestionCreate(BaseModel):
     points: int = Field(..., ge=1)
     is_mandatory: bool = False
     order: int
+    skill_tag: Optional[str] = Field(None, description="Skill tag for cumulative tracking (python-loops, python-functions, ...)")
 
 
 class QuizCreateRequest(BaseModel):
@@ -141,6 +142,7 @@ class QuestionUpdate(BaseModel):
     points: int
     is_mandatory: bool
     order: int
+    skill_tag: Optional[str] = Field(None, description="Skill tag for cumulative tracking")
     action: str = Field(..., description="add|update|delete")
 
 

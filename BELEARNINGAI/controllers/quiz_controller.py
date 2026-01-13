@@ -208,6 +208,31 @@ async def handle_attempt_quiz(
     if not attempt.submitted_at:
         attempt.submitted_at = datetime.utcnow()
 
+    # CUMULATIVE SKILL TRACKING: Update skill proficiency after quiz attempt
+    try:
+        from services.skill_tracking_service import update_skill_proficiency
+
+        # Lấy course_id từ quiz
+        course_id = quiz.course_id
+
+        # Update skill tracking (non-blocking)
+        skill_tracking_result = await update_skill_proficiency(
+            user_id=user_id,
+            course_id=course_id,
+            quiz_attempt_id=str(attempt.id)
+        )
+
+        # Log kết quả (optional)
+        if skill_tracking_result.get("updated_skills"):
+            print(f"✅ Skill tracking updated: {skill_tracking_result['updated_skills']}")
+            if skill_tracking_result.get("weak_skills_detected"):
+                print(f"⚠️ Weak skills detected: {skill_tracking_result['weak_skills_detected']}")
+    except Exception as e:
+        # Log error nhưng không fail request
+        print(f"⚠️ Skill tracking update failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
     # Base response
     response_data = {
         "attempt_id": str(attempt.id),
@@ -222,7 +247,7 @@ async def handle_attempt_quiz(
         "message": "Chúc mừng! Bạn đã pass quiz" if attempt.passed else "Bạn chưa đạt điểm pass. Hãy thử lại!"
     }
 
-    # ✅ MODULE ASSESSMENT REVIEW: Nếu là module assessment và FAIL
+    # MODULE ASSESSMENT REVIEW: Nếu là module assessment và FAIL
     if quiz.module_id and quiz.quiz_type == "final_check" and not attempt.passed:
         try:
             from services.module_assessment_review_service import analyze_module_assessment_result

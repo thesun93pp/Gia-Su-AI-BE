@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-﻿"""
-=======
 """
->>>>>>> origin/epics
 Course Schemas
 Định nghĩa request/response schemas cho course endpoints
 Bao gồm: search, list public, detail, enrollment status
@@ -12,10 +8,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import List, Optional
 
-<<<<<<< HEAD
-=======
 # region: Course Schemas
->>>>>>> origin/epics
 
 class CourseSearchFilters(BaseModel):
     """Filters cho tìm kiếm khóa học"""
@@ -23,20 +16,12 @@ class CourseSearchFilters(BaseModel):
     level: Optional[str] = Field(None, description="Cấp độ: Beginner|Intermediate|Advanced")
     duration_range: Optional[str] = Field(None, description="Khoảng thời lượng")
 
-<<<<<<< HEAD
-
-=======
->>>>>>> origin/epics
 class SearchMetadata(BaseModel):
     """Metadata về quá trình tìm kiếm"""
     keyword_used: Optional[str] = Field(None, description="Từ khóa đã tìm")
     filters_applied: CourseSearchFilters = Field(..., description="Các bộ lọc đã áp dụng")
     search_time_ms: float = Field(..., description="Thời gian tìm kiếm (milliseconds)")
 
-<<<<<<< HEAD
-
-=======
->>>>>>> origin/epics
 class CourseSearchItem(BaseModel):
     """Schema cho từng khóa học trong kết quả tìm kiếm"""
     id: str = Field(..., description="UUID khóa học")
@@ -55,10 +40,6 @@ class CourseSearchItem(BaseModel):
     is_enrolled: bool = Field(..., description="User hiện tại đã đăng ký chưa")
     created_at: datetime = Field(..., description="Ngày tạo khóa học")
 
-<<<<<<< HEAD
-
-=======
->>>>>>> origin/epics
 class CourseSearchResponse(BaseModel):
     """Response schema cho GET /api/v1/courses/search"""
     courses: List[CourseSearchItem] = Field(..., description="Danh sách khóa học tìm được")
@@ -67,17 +48,9 @@ class CourseSearchResponse(BaseModel):
     limit: int = Field(..., description="Giới hạn mỗi trang")
     search_metadata: SearchMetadata = Field(..., description="Metadata về tìm kiếm")
 
-<<<<<<< HEAD
-
 # Alias cho GET /api/v1/courses/public
 CourseListResponse = CourseSearchResponse
 
-
-=======
-# Alias cho GET /api/v1/courses/public
-CourseListResponse = CourseSearchResponse
-
->>>>>>> origin/epics
 class OwnerInfo(BaseModel):
     """Thông tin giảng viên của khóa học"""
     id: str = Field(..., description="UUID giảng viên")
@@ -87,19 +60,12 @@ class OwnerInfo(BaseModel):
     bio: Optional[str] = Field(None, description="Tiểu sử giảng viên")
     experience_years: Optional[int] = Field(None, description="Số năm kinh nghiệm")
 
-<<<<<<< HEAD
-
-=======
->>>>>>> origin/epics
 class LearningOutcome(BaseModel):
     """Mục tiêu học tập của khóa học"""
     description: str = Field(..., description="Mục tiêu cụ thể, đo lường được")
     skill_tag: Optional[str] = Field(None, description="Kỹ năng liên quan")
 
-<<<<<<< HEAD
-=======
 # region: Lesson Schemas
->>>>>>> origin/epics
 
 class LessonSummary(BaseModel):
     """Tóm tắt thông tin lesson trong module"""
@@ -110,12 +76,9 @@ class LessonSummary(BaseModel):
     content_type: str = Field(..., description="Loại nội dung: text|video|quiz|mixed")
     is_completed: bool = Field(..., description="Đã hoàn thành chưa (nếu user đã đăng ký)")
 
-<<<<<<< HEAD
-=======
 # endregion
 
 # region: Module Schemas
->>>>>>> origin/epics
 
 class ModuleSummary(BaseModel):
     """Tóm tắt thông tin module trong khóa học"""
@@ -126,8 +89,6 @@ class ModuleSummary(BaseModel):
     estimated_hours: float = Field(..., description="Thời gian học ước tính (giờ)")
     lessons: List[LessonSummary] = Field(..., description="Danh sách lessons trong module")
 
-<<<<<<< HEAD
-=======
 # endregion
 
 # region: Course Schemas
@@ -186,7 +147,6 @@ class LearningOutcome(BaseModel):
     """Mục tiêu học tập của khóa học"""
     description: str = Field(..., description="Mục tiêu cụ thể, đo lường được")
     skill_tag: Optional[str] = Field(None, description="Kỹ năng liên quan")
->>>>>>> origin/epics
 
 class CourseStatistics(BaseModel):
     """Thống kê về khóa học"""
@@ -197,10 +157,6 @@ class CourseStatistics(BaseModel):
     completion_rate: float = Field(..., description="Tỷ lệ hoàn thành trung bình 0-100")
     avg_rating: Optional[float] = Field(None, description="Điểm đánh giá trung bình 0-5")
 
-<<<<<<< HEAD
-
-=======
->>>>>>> origin/epics
 class EnrollmentInfo(BaseModel):
     """Thông tin enrollment của user hiện tại"""
     is_enrolled: bool = Field(..., description="Đã đăng ký chưa")
@@ -209,10 +165,6 @@ class EnrollmentInfo(BaseModel):
     progress_percent: Optional[float] = Field(None, description="Tiến độ học tập 0-100")
     can_access_content: bool = Field(..., description="Có thể truy cập nội dung không")
 
-<<<<<<< HEAD
-
-=======
->>>>>>> origin/epics
 class CourseDetailResponse(BaseModel):
     """Response schema cho GET /api/v1/courses/{course_id}"""
     id: str = Field(..., description="UUID khóa học")
@@ -233,8 +185,6 @@ class CourseDetailResponse(BaseModel):
     created_at: datetime = Field(..., description="Ngày tạo")
     updated_at: datetime = Field(..., description="Ngày cập nhật cuối")
 
-<<<<<<< HEAD
-=======
 class CourseEnrollmentStatusResponse(BaseModel):
     """Response schema cho GET /api/v1/courses/{course_id}/enrollment-status"""
     is_enrolled: bool = Field(..., description="Đã đăng ký chưa")
@@ -283,7 +233,6 @@ class CourseDetailResponse(BaseModel):
     enrollment_info: EnrollmentInfo = Field(..., description="Thông tin enrollment")
     created_at: datetime = Field(..., description="Ngày tạo")
     updated_at: datetime = Field(..., description="Ngày cập nhật cuối")
->>>>>>> origin/epics
 
 class CourseEnrollmentStatusResponse(BaseModel):
     """Response schema cho GET /api/v1/courses/{course_id}/enrollment-status"""
@@ -294,7 +243,4 @@ class CourseEnrollmentStatusResponse(BaseModel):
     enrolled_at: Optional[datetime] = Field(None, description="Ngày đăng ký")
     progress_percent: Optional[float] = Field(None, description="Tiến độ 0-100")
 
-<<<<<<< HEAD
-=======
 # endregion
->>>>>>> origin/epics

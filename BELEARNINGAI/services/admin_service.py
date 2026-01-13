@@ -1080,15 +1080,11 @@ async def update_course_admin(course_id: str, update_data: Dict) -> Dict:
         )
     
     # Update allowed fields
-<<<<<<< HEAD
-    allowed_fields = ["title", "description", "category", "level", "status"]
-=======
     allowed_fields = [
         "title", "description", "category", "level", "status",
         "language", "thumbnail_url", "preview_video_url",
         "prerequisites", "learning_outcomes"
     ]
->>>>>>> origin/epics
     
     for field, value in update_data.items():
         if field in allowed_fields:
@@ -1101,11 +1097,8 @@ async def update_course_admin(course_id: str, update_data: Dict) -> Dict:
         
         return {
             "course_id": str(course.id),
-<<<<<<< HEAD
-=======
             "title": course.title,
             "status": course.status,
->>>>>>> origin/epics
             "message": "Khóa học đã được cập nhật",
             "updated_at": course.updated_at.isoformat()
         }
@@ -1167,9 +1160,6 @@ async def delete_course_admin(course_id: str) -> Dict:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi khi xóa khóa học: {str(e)}"
-<<<<<<< HEAD
-        )
-=======
         )
 
 
@@ -1307,4 +1297,3 @@ async def handle_create_lesson_admin(
             detail=f"Lỗi khi tạo lesson: {str(e)}"
         )
     
->>>>>>> origin/epics

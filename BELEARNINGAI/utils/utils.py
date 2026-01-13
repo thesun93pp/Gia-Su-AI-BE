@@ -3,11 +3,8 @@ import re
 import unicodedata
 from datetime import datetime
 from typing import List
-<<<<<<< HEAD
-=======
 import os
 import uuid
->>>>>>> origin/epics
 
 
 def utc_now_str() -> str:

@@ -15,13 +15,6 @@ from typing import List, Optional, Literal
 
 class ChatMessageRequest(BaseModel):
     """Request schema cho chat message - Section 2.6.1"""
-<<<<<<< HEAD
-    question: str = Field(..., description="Câu hỏi của học viên")
-    conversation_id: Optional[str] = Field(None, description="UUID conversation để duy trì context")
-    context_type: Optional[Literal["lesson", "module", "general"]] = Field("general", description="Loại context")
-    image_base64: Optional[str] = None
-    image_mime_type: Optional[str] = None
-=======
     question: str = Field(..., description="Câu hỏi của học viên", examples=["Python list comprehension là gì?"])
     conversation_id: Optional[str] = Field(None, description="UUID conversation để duy trì context")
     context_type: Optional[Literal["lesson", "module", "general"]] = Field("general", description="Loại context")
@@ -55,7 +48,6 @@ class ChatMessageRequest(BaseModel):
                 }
             ]
         }
->>>>>>> origin/epics
 
 # ============================================================================
 # RESPONSE SCHEMAS - Section 2.6.1
@@ -87,8 +79,6 @@ class ChatMessageResponse(BaseModel):
     timestamp: datetime = Field(..., description="Thời gian tạo message")
     tokens_used: Optional[int] = Field(None, description="Số tokens AI đã dùng (optional)")
 
-<<<<<<< HEAD
-=======
     #Image support
     has_image: bool = Field(default=False, description="Message có kèm ảnh không")
     image_analyzed: bool = Field(default=False, description="AI đã phân tích ảnh chưa")
@@ -136,7 +126,6 @@ class ChatMessageResponse(BaseModel):
             ]
         }
 
->>>>>>> origin/epics
 
 # ============================================================================
 # RESPONSE SCHEMAS - Section 2.6.2 (Chat History)
