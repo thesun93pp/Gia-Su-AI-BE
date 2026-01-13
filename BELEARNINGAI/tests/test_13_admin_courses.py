@@ -168,7 +168,10 @@ class TestAdminCreateCourse:
             "description": "Khóa học Python chính thức của hệ thống",
             "category": "Programming",
             "level": "Beginner",
+<<<<<<< HEAD
             "language": "vi",
+=======
+>>>>>>> origin/epics
             "learning_outcomes": [
                 {
                     "description": "Master Python basics",

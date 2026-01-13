@@ -8,8 +8,15 @@ Section 4.4: Admin Analytics (3 endpoints)
 Tổng: 17 endpoints
 """
 
+<<<<<<< HEAD
 from fastapi import APIRouter, Depends, status, Query
 from typing import Optional
+=======
+from fastapi import APIRouter, Depends, status, Query, HTTPException
+from fastapi.responses import FileResponse
+from pathlib import Path
+from typing import Optional, Dict
+>>>>>>> origin/epics
 from middleware.auth import get_current_user
 from controllers.admin_controller import (
     handle_list_users_admin,
@@ -24,6 +31,11 @@ from controllers.admin_controller import (
     handle_create_course_admin,
     handle_update_course_admin,
     handle_delete_course_admin,
+<<<<<<< HEAD
+=======
+    handle_create_module_admin,
+    handle_create_lesson_admin,
+>>>>>>> origin/epics
     handle_list_classes_admin,
     handle_get_class_detail_admin
 )
@@ -46,8 +58,18 @@ from schemas.admin import (
     AdminCourseUpdateRequest,
     AdminCourseUpdateResponse,
     AdminDeleteCourseResponse,
+<<<<<<< HEAD
     AdminClassListResponse,
     AdminClassDetailResponse
+=======
+    AdminModuleCreateRequest,
+    AdminModuleCreateResponse,
+    AdminLessonCreateRequest,
+    AdminCreateLessonResponse,
+    AdminClassListResponse,
+    AdminClassDetailResponse
+
+>>>>>>> origin/epics
 )
 
 
@@ -280,6 +302,42 @@ async def delete_course_admin(
     return await handle_delete_course_admin(course_id, current_user)
 
 
+<<<<<<< HEAD
+=======
+@router.post(
+    "/courses/{course_id}/modules",
+    response_model=AdminModuleCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Tạo module mới cho khóa học",
+    description="Admin tạo một module mới trong một khóa học đã có."
+)
+async def create_module_admin(
+    course_id: str,
+    module_data: AdminModuleCreateRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Section 4.2.6 - Tạo module mới (Admin)"""
+    return await handle_create_module_admin(course_id, module_data, current_user)
+
+
+@router.post(
+    "/courses/{course_id}/modules/{module_id}/lessons",
+    response_model=AdminCreateLessonResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Tạo bài học mới cho module",
+    description="Admin tạo một bài học mới trong một module đã có."
+)
+async def create_lesson_admin(
+    course_id: str,
+    module_id: str,
+    lesson_data: AdminLessonCreateRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Section 4.2.7 - Tạo bài học mới (Admin)"""
+    return await handle_create_lesson_admin(course_id, module_id, lesson_data, current_user)
+
+
+>>>>>>> origin/epics
 # ============================================================================
 # Section 4.3: CLASS MONITORING FOR ADMIN
 # ============================================================================
@@ -372,3 +430,8 @@ async def get_system_health(
     from controllers.dashboard_controller import handle_get_system_health
     return await handle_get_system_health(current_user)
 
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> origin/epics

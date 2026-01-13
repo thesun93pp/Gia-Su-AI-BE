@@ -26,6 +26,13 @@ from schemas.admin import (
     AdminCourseUpdateRequest,
     AdminCourseUpdateResponse,
     AdminDeleteCourseResponse,
+<<<<<<< HEAD
+=======
+    AdminModuleCreateRequest,
+    AdminModuleCreateResponse,
+    AdminLessonCreateRequest,
+    AdminCreateLessonResponse,
+>>>>>>> origin/epics
     AdminClassListResponse,
     AdminClassDetailResponse
 )
@@ -485,6 +492,7 @@ async def handle_create_course_admin(
     current_user: Dict
 ) -> AdminCourseCreateResponse:
     """
+<<<<<<< HEAD
     4.2.3: Tạo khóa học chính thức (public course)
 
     Args:
@@ -507,10 +515,31 @@ async def handle_create_course_admin(
         # Gọi course_service.create_course_admin với đầy đủ tham số
         created_course = await course_service.create_course_admin(
             admin_id=admin_id,
+=======
+    4.2.3: Tạo khóa học chính thức (Admin)
+    Gọi hàm create_course_admin từ service với tất cả tham số
+    """
+    try:
+        # Validate admin
+        if current_user.get("role") != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only admins can create courses"
+            )
+        
+        learning_outcomes_data = [outcome.dict() for outcome in course_data.learning_outcomes] if course_data.learning_outcomes else []
+       
+       
+        
+        # Tạo khóa học
+        result = await course_service.create_course_admin(
+            admin_id=current_user.get("user_id"),
+>>>>>>> origin/epics
             title=course_data.title,
             description=course_data.description,
             category=course_data.category,
             level=course_data.level,
+<<<<<<< HEAD
             language=course_data.language,
             thumbnail_url=course_data.thumbnail_url,
             preview_video_url=course_data.preview_video_url,
@@ -520,12 +549,28 @@ async def handle_create_course_admin(
         )
         return AdminCourseCreateResponse(**created_course)
 
+=======
+            thumbnail_url=course_data.thumbnail_url,
+            preview_video_url=course_data.preview_video_url,
+            prerequisites=course_data.prerequisites,
+            learning_outcomes=learning_outcomes_data,
+            status=course_data.status,
+            
+        )
+        
+        return AdminCourseCreateResponse(**result)
+        
+>>>>>>> origin/epics
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+<<<<<<< HEAD
             detail=f"Lỗi khi tạo khóa học: {str(e)}"
+=======
+            detail=str(e)
+>>>>>>> origin/epics
         )
 
 
@@ -552,7 +597,13 @@ async def handle_update_course_admin(
                 detail="Chỉ admin mới có quyền chỉnh sửa khóa học"
             )
         
+<<<<<<< HEAD
         updated_course = await admin_service.update_course_admin(course_id, course_data.dict(exclude_unset=True))
+=======
+        update_data = course_data.dict(exclude_unset=True)
+
+        updated_course = await admin_service.update_course_admin(course_id, update_data)
+>>>>>>> origin/epics
         return AdminCourseUpdateResponse(**updated_course)
         
     except HTTPException:
@@ -597,6 +648,124 @@ async def handle_delete_course_admin(
         )
 
 
+<<<<<<< HEAD
+=======
+async def handle_create_module_admin(
+    course_id: str,
+    module_data: AdminModuleCreateRequest,
+    current_user: Dict
+) -> AdminModuleCreateResponse:
+    """
+    4.2.6: Create a new module in a course (Admin)
+    
+    Args:
+        course_id: ID of the course
+        module_data: New module information
+        current_user: Admin user
+        
+    Returns:
+        AdminModuleCreateResponse
+    """
+    try:
+        if current_user.get("role") != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only admins can create modules"
+            )
+        
+        learning_outcomes_data = [outcome.dict() for outcome in module_data.learning_outcomes] if module_data.learning_outcomes else []
+        resource_data = [res.dict() for res in module_data.resource] if module_data.resource else []
+        
+        course = await course_service.add_module_to_course(
+            course_id=course_id,
+            title=module_data.title,
+            description=module_data.description,
+            order=module_data.order,
+            difficulty=module_data.difficulty,
+            estimated_hours=module_data.estimated_hours,
+            learning_outcomes=learning_outcomes_data,
+            prerequisites=module_data.prerequisites,
+            resource=resource_data
+        )
+        
+        if not course:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Course with ID '{course_id}' not found. Cannot create module."
+            )
+            
+        new_module = course.modules[-1]
+        
+        return AdminModuleCreateResponse(
+            course_id=course_id,
+            title=new_module.title,
+            description=new_module.description,
+            order=new_module.order,
+            difficulty=new_module.difficulty,
+            estimated_hours=new_module.estimated_hours,
+            learning_outcomes=new_module.learning_outcomes,
+            prerequisites=new_module.prerequisites,
+            resource=new_module.resources,
+            message=f"Module '{new_module.title}' created successfully in course '{course.title}'."
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+async def handle_create_lesson_admin(
+    course_id: str,
+    module_id: str,
+    lesson_data: AdminLessonCreateRequest,
+    current_user: Dict
+) -> AdminCreateLessonResponse:
+    """
+    Creates a new lesson in a module for a given course.
+    
+    Args:
+        course_id: The ID of the course.
+        module_id: The ID of the module.
+        lesson_data: The lesson data.
+        current_user: The current admin user.
+        
+    Returns:
+        The created lesson data.
+    """
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can create lessons"
+        )
+
+    new_lesson_data = await course_service.add_lesson_to_module(
+        course_id=course_id,
+        module_id=module_id,
+        lesson_data=lesson_data
+    )
+
+    if not new_lesson_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not create lesson. The provided course or module may not exist, or the lesson data may be invalid."
+        )
+
+    return AdminCreateLessonResponse(
+        **new_lesson_data,
+        message=f"Lesson '{new_lesson_data['title']}' created successfully."
+    )
+
+
+
+
+
+
+
+>>>>>>> origin/epics
 # ============================================================================
 # Section 4.3: GIÁM SÁT LỚP HỌC
 # ============================================================================

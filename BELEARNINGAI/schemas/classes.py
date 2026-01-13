@@ -84,6 +84,10 @@ class ClassUpdateRequest(BaseModel):
     description: Optional[str] = None
     max_students: Optional[int] = None
     end_date: Optional[datetime] = None
+<<<<<<< HEAD
+=======
+    status: Optional[str] = None
+>>>>>>> origin/epics
 
 
 class ClassUpdateResponse(BaseModel):

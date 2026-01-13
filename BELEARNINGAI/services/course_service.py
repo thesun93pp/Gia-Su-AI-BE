@@ -5,7 +5,11 @@ Tuân thủ: CHUCNANG.md Section 2.3, 2.5, 3.1
 """
 
 from datetime import datetime
+<<<<<<< HEAD
 from typing import Optional, List
+=======
+from typing import Optional, List, Any
+>>>>>>> origin/epics
 from models.models import Course, Module, Lesson, Enrollment, EmbeddedModule, EmbeddedLesson
 from beanie.operators import In, RegEx, Or
 
@@ -183,7 +187,15 @@ async def add_module_to_course(
     title: str,
     description: str,
     order: int,
+<<<<<<< HEAD
     difficulty: str = "Basic"
+=======
+    difficulty: str = "Basic",
+    estimated_hours: int = 0,
+    learning_outcomes: Optional[List[dict]] = None,
+    prerequisites: Optional[List[str]] = None,
+    resource: Optional[List[dict]] = None,
+>>>>>>> origin/epics
 ) -> Optional[Course]:
     """
     Thêm module vào course
@@ -194,6 +206,13 @@ async def add_module_to_course(
         description: Mô tả module
         order: Thứ tự module
         difficulty: Độ khó
+<<<<<<< HEAD
+=======
+        estimated_hours: Giờ ước tính
+        learning_outcomes: Kết quả học tập
+        prerequisites: yêu cầu
+        resource: tài nguyên
+>>>>>>> origin/epics
         
     Returns:
         Course document đã update hoặc None
@@ -211,11 +230,39 @@ async def add_module_to_course(
         title=title,
         description=description,
         order=order,
+<<<<<<< HEAD
         difficulty=difficulty
+=======
+        difficulty=difficulty,
+        estimated_hours=estimated_hours,
+        learning_outcomes=learning_outcomes or [],
+        prerequisites=prerequisites or [],
+        resources=resource or [],
+>>>>>>> origin/epics
     )
     
     course.modules.append(new_module)
     course.updated_at = datetime.utcnow()
+<<<<<<< HEAD
+=======
+
+    # Also create a separate Module document to be stored in the 'modules' collection
+    module_doc = Module(
+        id=new_module.id,
+        course_id=course_id,
+        title=title,
+        description=description,
+        order=order,
+        difficulty=difficulty,
+        estimated_hours=estimated_hours,
+        learning_outcomes=learning_outcomes or [],
+        prerequisites=prerequisites or [],
+        resources=resource or [],
+        total_lessons=0,
+        total_duration_minutes=0
+    )
+    await module_doc.insert()
+>>>>>>> origin/epics
     
     await course.save()
     return course
@@ -295,18 +342,24 @@ async def delete_module_from_course(course_id: str, module_id: str) -> Optional[
 async def add_lesson_to_module(
     course_id: str,
     module_id: str,
+<<<<<<< HEAD
     title: str,
     order: int,
     content: str = "",
     content_type: str = "text",
     duration_minutes: int = 0
 ) -> Optional[Course]:
+=======
+    lesson_data: Any
+) -> Optional[dict]:
+>>>>>>> origin/epics
     """
     Thêm lesson vào module
     
     Args:
         course_id: ID của course
         module_id: ID của module
+<<<<<<< HEAD
         title: Tiêu đề lesson
         order: Thứ tự lesson
         content: Nội dung
@@ -345,6 +398,70 @@ async def add_lesson_to_module(
     course.updated_at = datetime.utcnow()
     await course.save()
     return course
+=======
+        lesson_data: Dữ liệu lesson từ request
+        
+    Returns:
+        Dict chứa thông tin lesson đã tạo hoặc None
+    """
+    course = await get_course_by_id(course_id)
+    if not course:
+        return None
+    
+    module_found = None
+    if hasattr(course, 'modules'):
+        for m in course.modules:
+            if m.id == module_id:
+                module_found = m
+                break
+
+    if not module_found:
+        return None
+
+    if not hasattr(module_found, 'lessons'):
+        module_found.lessons = []
+    
+    lesson_dict = lesson_data.dict()
+    if 'resource' in lesson_dict and lesson_dict['resource'] is not None:
+        lesson_dict['resources'] = lesson_dict.pop('resource')
+
+    new_lesson = EmbeddedLesson(**lesson_dict)
+    module_found.lessons.append(new_lesson)
+    
+    course.updated_at = datetime.utcnow()
+    await course.save()
+
+    # Create Lesson document
+    lesson_doc_data = {
+        'id': new_lesson.id,
+        'course_id': course_id,
+        'module_id': module_id,
+        'title': lesson_data.title,
+        'order': lesson_data.order,
+        'content': lesson_data.content,
+        'content_type': lesson_data.content_type,
+        'duration_minutes': lesson_data.duration_minutes,
+        'video_url': getattr(lesson_data, 'video_url', None),
+        'audio_url': getattr(lesson_data, 'audio_url', None),
+        'resources': [r.dict() if hasattr(r, 'dict') else r for r in getattr(lesson_data, 'resource', [])] if getattr(lesson_data, 'resource', None) else [],
+        'learning_objectives': getattr(lesson_data, 'learning_objectives', []),
+        'simulation_html': getattr(lesson_data, 'simulation_html', None),
+        'quiz_id': getattr(lesson_data, 'quiz_id', None),
+        'is_published': getattr(lesson_data, 'is_published', False),
+        'description': getattr(lesson_data, 'description', '')
+    }
+
+    lesson_doc = Lesson(**lesson_doc_data)
+    await lesson_doc.insert()
+
+    response_data = new_lesson.dict()
+    response_data['course_id'] = course_id
+    response_data['module_id'] = module_id
+    if 'resources' in response_data:
+        response_data['resource'] = response_data.pop('resources')
+    
+    return response_data
+>>>>>>> origin/epics
 
 
 async def update_lesson_in_module(
@@ -353,7 +470,12 @@ async def update_lesson_in_module(
     lesson_id: str,
     title: Optional[str] = None,
     content: Optional[str] = None,
+<<<<<<< HEAD
     video_url: Optional[str] = None
+=======
+    video_url: Optional[str] = None,
+    simulation_html: Optional[str] = None
+>>>>>>> origin/epics
 ) -> Optional[Course]:
     """
     Cập nhật lesson trong module
@@ -363,6 +485,10 @@ async def update_lesson_in_module(
         module_id: ID của module
         lesson_id: ID của lesson
         title, content, video_url: Fields cần update
+<<<<<<< HEAD
+=======
+        simulation_html: Nội dung HTML mô phỏng
+>>>>>>> origin/epics
         
     Returns:
         Course document đã update hoặc None
@@ -390,6 +516,11 @@ async def update_lesson_in_module(
                         lesson.content = content
                     if video_url is not None:
                         lesson.video_url = video_url
+<<<<<<< HEAD
+=======
+                    if simulation_html is not None:
+                        lesson.simulation_html = simulation_html
+>>>>>>> origin/epics
                     break
     
     course.updated_at = datetime.utcnow()
@@ -802,7 +933,12 @@ async def create_course_admin(
     preview_video_url: Optional[str] = None,
     prerequisites: List[str] = None,
     learning_outcomes: List[dict] = None,
+<<<<<<< HEAD
     status: str = "draft"
+=======
+    status: str = "draft",
+    modules: Optional[List[dict]] = None,
+>>>>>>> origin/epics
 ) -> dict:
     """
     4.2.3: Tạo khóa học chính thức (Admin)
@@ -821,10 +957,51 @@ async def create_course_admin(
         prerequisites: List yêu cầu kiến thức
         learning_outcomes: List mục tiêu học tập
         status: draft|published
+<<<<<<< HEAD
+=======
+        modules: List of modules to be created with the course
+>>>>>>> origin/epics
         
     Returns:
         Dict với course_id, title, status, created_by, message
     """
+<<<<<<< HEAD
+=======
+    embedded_modules = []
+    total_lessons = 0
+    total_duration_minutes = 0
+
+    if modules:
+        for module_data in modules:
+            module_lessons = []
+            module_duration = 0
+            if "difficulty_level" in module_data:
+                module_data["difficulty"] = module_data.pop("difficulty_level")
+            if "resource" in module_data:
+                module_data["resources"] = module_data.pop("resource")
+
+            if module_data.get("lessons"):
+                for lesson_data in module_data["lessons"]:
+                    if "resource" in lesson_data:
+                        lesson_data["resources"] = lesson_data.pop("resource")
+                    new_lesson = EmbeddedLesson(**lesson_data)
+                    module_lessons.append(new_lesson)
+                    module_duration += new_lesson.duration_minutes
+            
+            module_data.pop("lessons", None)
+            new_module = EmbeddedModule(**module_data, lessons=module_lessons)
+            
+            # Recalculate totals for the module
+            new_module.total_lessons = len(module_lessons)
+            new_module.total_duration_minutes = module_duration
+            
+            embedded_modules.append(new_module)
+            
+            # Update course totals
+            total_lessons += new_module.total_lessons
+            total_duration_minutes += new_module.estimated_hours * 60 # Convert hours to minutes for consistency
+
+>>>>>>> origin/epics
     course = Course(
         title=title,
         description=description,
@@ -838,11 +1015,18 @@ async def create_course_admin(
         prerequisites=prerequisites or [],
         learning_outcomes=learning_outcomes or [],
         status=status,
+<<<<<<< HEAD
         # Thêm các trường bắt buộc còn thiếu
         modules=[],
         total_modules=0,
         total_lessons=0,
         total_duration_minutes=0,
+=======
+        modules=embedded_modules,
+        total_modules=len(embedded_modules),
+        total_lessons=total_lessons,
+        total_duration_minutes=total_duration_minutes,
+>>>>>>> origin/epics
         enrollment_count=0,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow()
@@ -850,7 +1034,29 @@ async def create_course_admin(
     
     await course.insert()
     
+<<<<<<< HEAD
     return {
+=======
+    if embedded_modules:
+        module_docs = []
+        for emb_mod in embedded_modules:
+            module_docs.append(Module(
+                id=emb_mod.id,
+                course_id=str(course.id),
+                title=emb_mod.title,
+                description=emb_mod.description,
+                order=emb_mod.order,
+                difficulty=emb_mod.difficulty,
+                estimated_hours=emb_mod.estimated_hours,
+                learning_outcomes=emb_mod.learning_outcomes,
+                total_lessons=len(emb_mod.lessons),
+                total_duration_minutes=emb_mod.total_duration_minutes
+            ))
+        if module_docs:
+            await Module.insert_many(module_docs)
+    
+    response = {
+>>>>>>> origin/epics
         "course_id": str(course.id),
         "title": course.title,
         "status": course.status,
@@ -859,6 +1065,11 @@ async def create_course_admin(
         "created_at": course.created_at,
         "message": "Khóa học chính thức đã được tạo thành công"
     }
+<<<<<<< HEAD
+=======
+    
+    return response
+>>>>>>> origin/epics
 
 
 async def update_course_admin(
@@ -932,13 +1143,22 @@ async def update_course_admin(
     course.updated_at = datetime.utcnow()
     await course.save()
     
+<<<<<<< HEAD
     return {
+=======
+    response = {
+>>>>>>> origin/epics
         "course_id": str(course.id),
         "title": course.title,
         "status": course.status,
         "updated_at": course.updated_at,
         "message": "Khóa học đã được cập nhật thành công"
     }
+<<<<<<< HEAD
+=======
+    
+    return response
+>>>>>>> origin/epics
 
 
 async def delete_course_admin(course_id: str) -> dict:
@@ -1017,5 +1237,9 @@ async def delete_course_admin(course_id: str) -> dict:
         "title": course.title,
         "impact": impact,
         "message": "Khóa học đã được xóa vĩnh viễn khỏi hệ thống"
+<<<<<<< HEAD
     }
 
+=======
+    }
+>>>>>>> origin/epics

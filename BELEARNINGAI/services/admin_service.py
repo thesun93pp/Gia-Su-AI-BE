@@ -1080,7 +1080,15 @@ async def update_course_admin(course_id: str, update_data: Dict) -> Dict:
         )
     
     # Update allowed fields
+<<<<<<< HEAD
     allowed_fields = ["title", "description", "category", "level", "status"]
+=======
+    allowed_fields = [
+        "title", "description", "category", "level", "status",
+        "language", "thumbnail_url", "preview_video_url",
+        "prerequisites", "learning_outcomes"
+    ]
+>>>>>>> origin/epics
     
     for field, value in update_data.items():
         if field in allowed_fields:
@@ -1093,6 +1101,11 @@ async def update_course_admin(course_id: str, update_data: Dict) -> Dict:
         
         return {
             "course_id": str(course.id),
+<<<<<<< HEAD
+=======
+            "title": course.title,
+            "status": course.status,
+>>>>>>> origin/epics
             "message": "Khóa học đã được cập nhật",
             "updated_at": course.updated_at.isoformat()
         }
@@ -1154,4 +1167,144 @@ async def delete_course_admin(course_id: str) -> Dict:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi khi xóa khóa học: {str(e)}"
+<<<<<<< HEAD
         )
+=======
+        )
+
+
+async def handle_create_lesson_admin(
+    course_id: str,
+    module_id: str,
+    lesson_data: Dict
+) -> Dict:
+    """
+    Tạo lesson mới trong module (Admin - Section 4.2.6)
+    
+    Business Logic:
+    1. Validate course exists
+    2. Validate module exists in course
+    3. Create lesson with proper validation
+    4. Update course/module metadata
+    5. Return lesson details with IDs
+    
+    Args:
+        course_id: ID của course
+        module_id: ID của module
+        lesson_data: Dict chứa lesson info (title, order, content, etc)
+        
+    Returns:
+        Dict chứa lesson_id, title, order, status, và các thông tin khác
+        
+    Raises:
+        404: Course hoặc module không tồn tại
+        400: Validation error
+        500: Server error
+    """
+    from services.course_service import add_lesson_to_module
+    
+    try:
+        # Validate course exists
+        course = await Course.get(course_id)
+        if not course:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Khóa học không tồn tại"
+            )
+        
+        # Validate module exists in course
+        module_found = None
+        if hasattr(course, 'modules') and course.modules:
+            for module in course.modules:
+                if str(module.id) == module_id:
+                    module_found = module
+                    break
+        
+        if not module_found:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Module không tồn tại trong khóa học này"
+            )
+        
+        # Validate required fields
+        required_fields = ['title', 'order']
+        for field in required_fields:
+            if field not in lesson_data or not lesson_data[field]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Field '{field}' là bắt buộc"
+                )
+        
+        # Create lesson (handle both simple and complex lesson_data)
+        class SimpleLessonData:
+            """Helper class để convert dict to object"""
+            def __init__(self, data):
+                self.title = data.get('title')
+                self.order = data.get('order')
+                self.content = data.get('content', '')
+                self.content_type = data.get('content_type', 'text')
+                self.duration_minutes = data.get('duration_minutes', 0)
+                self.video_url = data.get('video_url')
+                self.audio_url = data.get('audio_url')
+                self.resource = data.get('resource', [])
+                self.learning_objectives = data.get('learning_objectives', [])
+                self.simulation_html = data.get('simulation_html')
+                self.quiz_id = data.get('quiz_id')
+                self.is_published = data.get('is_published', False)
+                self.description = data.get('description', '')
+            
+            def dict(self):
+                return {
+                    'title': self.title,
+                    'order': self.order,
+                    'content': self.content,
+                    'content_type': self.content_type,
+                    'duration_minutes': self.duration_minutes,
+                    'video_url': self.video_url,
+                    'audio_url': self.audio_url,
+                    'resources': self.resource if isinstance(self.resource, list) else [],
+                    'learning_objectives': self.learning_objectives,
+                    'simulation_html': self.simulation_html,
+                    'quiz_id': self.quiz_id,
+                    'is_published': self.is_published,
+                    'description': self.description
+                }
+        
+        # Convert lesson_data to object format
+        lesson_obj = SimpleLessonData(lesson_data)
+        
+        # Call course_service to add lesson
+        result = await add_lesson_to_module(
+            course_id=course_id,
+            module_id=module_id,
+            lesson_data=lesson_obj
+        )
+        
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Lỗi khi tạo lesson"
+            )
+        
+        return {
+            "lesson_id": result.get('id'),
+            "title": result.get('title'),
+            "order": result.get('order'),
+            "content_type": result.get('content_type'),
+            "duration_minutes": result.get('duration_minutes'),
+            "is_published": result.get('is_published', False),
+            "status": "created",
+            "message": "Lesson đã được tạo thành công",
+            "course_id": course_id,
+            "module_id": module_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi khi tạo lesson: {str(e)}"
+        )
+    
+>>>>>>> origin/epics

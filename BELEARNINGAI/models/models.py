@@ -51,6 +51,10 @@ class EmbeddedLesson(BaseModel):
     audio_url: Optional[str] = None  # URL audio file (mp3, wav, ogg)
     resources: List[dict] = Field(default_factory=list)
     learning_objectives: List[str] = Field(default_factory=list, description="Mục tiêu học tập của lesson")
+<<<<<<< HEAD
+=======
+    simulation_html: Optional[str] = None
+>>>>>>> origin/epics
     quiz_id: Optional[str] = None
     is_published: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -63,7 +67,11 @@ class EmbeddedModule(BaseModel):
     title: str
     description: str
     order: int
+<<<<<<< HEAD
     difficulty: str = "Basic"
+=======
+    difficulty: str = "easy"
+>>>>>>> origin/epics
     estimated_hours: float = 0
     learning_outcomes: List[dict] = Field(default_factory=list)
     prerequisites: List[str] = Field(default_factory=list, description="Module IDs tiên quyết")
@@ -222,11 +230,20 @@ class Module(Document):
     title: str = Field(..., description="Tên module")
     description: str = Field(..., description="Mô tả module")
     order: int = Field(..., description="Thứ tự module trong khóa học")
+<<<<<<< HEAD
     difficulty: str = Field(default="Basic", description="Độ khó: Basic|Intermediate|Advanced")
+=======
+    difficulty: str = Field(default="easy", description="Độ khó: easy|medium|hard")
+>>>>>>> origin/epics
     estimated_hours: float = Field(default=0, description="Thời gian học ước tính (giờ)")
     
     # Learning outcomes cho module - theo LearningOutcome schema
     learning_outcomes: List[dict] = Field(default_factory=list, description="Mục tiêu học tập của module")
+<<<<<<< HEAD
+=======
+    prerequisites: List[str] = Field(default_factory=list, description="Module IDs tiên quyết")
+    resources: List[dict] = Field(default_factory=list, description="Tài liệu module-level")
+>>>>>>> origin/epics
     # Learning outcome structure từ learning.py LearningOutcome: {
     #   "id": "uuid",
     #   "outcome": "Mô tả mục tiêu cụ thể",
