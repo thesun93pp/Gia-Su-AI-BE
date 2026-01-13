@@ -21,7 +21,7 @@ from controllers.admin_controller import (
     handle_delete_user_admin,
     handle_change_user_role_admin,
     handle_reset_user_password_admin,
-    handle_list_courses_admin,
+   
     handle_get_course_detail_admin,
     handle_create_course_admin,
     handle_update_course_admin,
@@ -29,7 +29,8 @@ from controllers.admin_controller import (
     handle_create_module_admin,
     handle_create_lesson_admin,
     handle_list_classes_admin,
-    handle_get_class_detail_admin
+    handle_get_class_detail_admin,
+    handle_list_courses_admin,
 )
 from schemas.admin import (
     AdminUserListResponse,
@@ -43,7 +44,6 @@ from schemas.admin import (
     AdminChangeRoleResponse,
     AdminResetPasswordRequest,
     AdminResetPasswordResponse,
-    AdminCourseListResponse,
     AdminCourseDetailResponse,
     AdminCourseCreateRequest,
     AdminCourseCreateResponse,
@@ -55,8 +55,8 @@ from schemas.admin import (
     AdminLessonCreateRequest,
     AdminCreateLessonResponse,
     AdminClassListResponse,
-    AdminClassDetailResponse
-
+    AdminClassDetailResponse,
+    AdminCourseListResponse,
 )
 
 
@@ -194,37 +194,61 @@ async def reset_user_password_admin(
 # ADMIN COURSE MANAGEMENT (Section 4.2)
 # ============================================================================
 
+
 @router.get(
     "/courses",
     response_model=AdminCourseListResponse,
     status_code=status.HTTP_200_OK,
-    summary="Xem tất cả khóa học",
-    description="List all courses (public + personal) với filter (author, status, category, type), search"
+    summary="Xem danh sách khóa học",
+    description="Hiển thị tất cả khóa học (public + personal) với filter (status, creator, category), sort"
 )
 async def list_courses_admin(
-    author_id: Optional[str] = Query(None, description="Filter author (owner_id)"),
-    status_param: Optional[str] = Query(None, alias="status", description="draft|published|archived"),
-    category: Optional[str] = Query(None, description="Filter category"),
-    course_type: Optional[str] = Query(None, description="public|personal"),
-    keyword: Optional[str] = Query(None, description="Search tên course"),
-    sort_by: str = Query("created_at", description="Field sort"),
-    sort_order: str = Query("desc", description="asc|desc"),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    status: Optional[str] = Query(
+        None,
+        description="Lọc theo trạng thái",
+        regex="^(active|draft|archived)$"
+    ),
+    creator_id: Optional[str] = Query(
+        None,
+        description="Lọc theo người tạo (UUID)"
+    ),
+    category: Optional[str] = Query(
+        None,
+        description="Lọc theo danh mục"
+    ),
+    sort_by: str = Query(
+        "created_at",
+        description="Sắp xếp theo",
+        regex="^(created_at|enrollment_count|title)$"
+    ),
+    order: str = Query(
+        "desc",
+        description="Thứ tự sắp xếp",
+        regex="^(asc|desc)$"
+    ),
+    skip: int = Query(0, ge=0, description="Pagination offset"),
+    limit: int = Query(20, ge=1, le=100, description="Pagination limit"),
     current_user: dict = Depends(get_current_user)
 ):
-    """Section 4.2.1 - Xem tất cả khóa học (Admin)"""
+    """
+    **Section 4.2.1** - Xem danh sách khóa học (Admin)
+    
+    Hiển thị tất cả khóa học (cả public lẫn personal) với hỗ trợ:
+    - Filter: status, creator_id, category
+    - Sort: created_at, enrollment_count, title
+    - Pagination: skip, limit
+    
+    **Quyền yêu cầu:** Admin role
+    """
     return await handle_list_courses_admin(
-        current_user=current_user,
-        author_id=author_id,
-        status=status_param,
+        status=status,
+        creator_id=creator_id,
         category=category,
-        course_type=course_type,
-        keyword=keyword,
         sort_by=sort_by,
-        sort_order=sort_order,
+        order=order,
         skip=skip,
-        limit=limit
+        limit=limit,
+        current_user=current_user
     )
 
 
@@ -320,6 +344,7 @@ async def create_lesson_admin(
 ):
     """Section 4.2.7 - Tạo bài học mới (Admin)"""
     return await handle_create_lesson_admin(course_id, module_id, lesson_data, current_user)
+
 
 
 # ============================================================================

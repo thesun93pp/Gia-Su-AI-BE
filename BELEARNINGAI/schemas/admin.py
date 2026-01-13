@@ -5,7 +5,7 @@ Admin Schemas
 
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Dict
 
 
 class AdminUserListItem(BaseModel):
@@ -75,6 +75,7 @@ class ActivitySummary(BaseModel):
 
 
 class AdminUserDetailResponse(BaseModel):
+    """Response cho GET /api/v1/admin/users/{user_id}"""
     user_id: str = Field(..., description="UUID")
     full_name: str
     email: str    
@@ -83,7 +84,8 @@ class AdminUserDetailResponse(BaseModel):
     created_at: datetime
     last_login_at: Optional[datetime] = None
     profile: ProfileInfo
-    activity_summary: Optional[ActivitySummary] = None
+    activity_summary: ActivitySummary = Field(default_factory=ActivitySummary)
+    
 
 
 class AdminCreateUserRequest(BaseModel):
@@ -198,8 +200,8 @@ class AdminDashboardResponse(BaseModel):
 # ============================================================================
 
 class LearningOutcome(BaseModel):
-    description: str = Field(..., description="Mô tả kết quả học tập đạt được")
-    skill_tag: str = Field(..., description="Skill tag dùng cho đánh giá & lộ trình")
+    description: str = Field(..., min_length=5, max_length=500)
+    skill_tag: Optional[str] = Field(None, description="Skill category: Problem Solving, Critical Thinking, etc.")
 
 class AdminModuleCreateResponse(BaseModel):
     course_id: str = Field(..., description="UUID")
@@ -257,28 +259,6 @@ class CourseAuthor(BaseModel):
     full_name: str
     email: str
     role: str = Field(..., description="admin|instructor|student")
-
-
-class AdminCourseListItem(BaseModel):
-    course_id: str = Field(..., description="UUID")
-    title: str
-    thumbnail_url: Optional[str] = None
-    author: CourseAuthor
-    course_type: str = Field(..., description="public|personal")
-    enrollment_count: int
-    status: str = Field(..., description="draft|published|archived")
-    category: str
-    level: str = Field(..., description="Beginner|Intermediate|Advanced")
-    created_at: datetime
-    updated_at: datetime
-
-
-class AdminCourseListResponse(BaseModel):
-    data: List[AdminCourseListItem]
-    total: int
-    skip: int
-    limit: int
-    has_next: bool
 
 
 class ModuleSummary(BaseModel):
@@ -435,5 +415,31 @@ class AdminClassDetailResponse(BaseModel):
     created_at: datetime = Field(..., description="Ngày tạo lớp")
     start_date: datetime = Field(..., description="Thời gian bắt đầu")
     end_date: datetime = Field(..., description="Thời gian kết thúc")
+
+
+# ============================================================================
+# ADMIN COURSE LIST SCHEMAS (Section 4.2)
+# ============================================================================
+
+class AdminCourseListItem(BaseModel):
+    """Course item trong danh sách"""
+    course_id: str = Field(..., description="UUID của khóa học")
+    title: str = Field(..., description="Tên khóa học")
+    creator_name: str = Field(..., description="Tên người tạo")
+    category: str = Field(..., description="Danh mục")
+    level: str = Field(..., description="Mức độ (Beginner|Intermediate|Advanced)")
+    status: str = Field(..., description="Trạng thái (active|draft|archived)")
+    enrollment_count: int = Field(default=0, description="Số lượng học viên")
+    created_at: datetime = Field(..., description="Ngày tạo")
+    last_updated: datetime = Field(..., description="Lần cập nhật cuối")
+    
+
+class AdminCourseListResponse(BaseModel):
+    """Response cho endpoint list courses"""
+    data: List[AdminCourseListItem] = Field(..., description="Danh sách khóa học")
+    total: int = Field(..., description="Tổng số khóa học")
+    skip: int = Field(..., description="Pagination offset")
+    limit: int = Field(..., description="Pagination limit")
+   
 
 
