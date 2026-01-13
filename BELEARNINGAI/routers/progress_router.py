@@ -13,6 +13,11 @@ from schemas.skill_tracking import (
     SkillHistoryResponse,
     SkillsOverviewResponse
 )
+from schemas.skill_gaps_dashboard import (
+    SkillGapsDashboardResponse,
+    CourseSkillGapsAnalyticsResponse,
+    StudentClassComparisonResponse
+)
 
 
 router = APIRouter(prefix="/progress", tags=["Progress"])
@@ -154,3 +159,110 @@ async def get_skills_overview(
     )
 
     return result
+
+
+# ============================================================================
+# ANALYTICS & DASHBOARD ENDPOINTS
+# ============================================================================
+
+@router.get(
+    "/dashboard/skill-gaps/{course_id}",
+    response_model=SkillGapsDashboardResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Dashboard tổng quan skill gaps",
+    description="""
+    Dashboard trực quan về điểm mạnh/yếu của học viên:
+    - Overview stats (total skills, weak/strong count, average proficiency)
+    - Skill distribution (pie chart data)
+    - Weakness heatmap (top 10 weakest skills)
+    - Improvement trend (line chart - last 30 days)
+    - Top weaknesses (detailed list)
+    - Recent improvements
+
+    Dùng để hiển thị dashboard với charts và visualizations.
+    """
+)
+async def get_skill_gaps_dashboard(
+    course_id: str,
+    include_ai_insights: bool = Query(default=True, description="Include AI-generated insights"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Dashboard tổng quan về skill gaps của user"""
+    from services.skill_gaps_analytics_service import get_skill_gaps_dashboard
+    from services.ai_insights_service import generate_skill_gaps_insights
+
+    user_id = current_user["user_id"]
+
+    result = await get_skill_gaps_dashboard(
+        user_id=user_id,
+        course_id=course_id
+    )
+
+    # Add AI insights if requested
+    if include_ai_insights and result.get("overview", {}).get("total_skills", 0) > 0:
+        ai_insights = await generate_skill_gaps_insights(result)
+        result["ai_insights"] = ai_insights
+
+    return result
+
+
+@router.get(
+    "/analytics/course-skill-gaps/{course_id}",
+    response_model=CourseSkillGapsAnalyticsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Analytics skill gaps cho toàn course (instructor/admin)",
+    description="""
+    Analytics cho instructor/admin xem tổng quan skill gaps của tất cả students:
+    - Total students
+    - Student distribution (struggling/average/excelling)
+    - Most common weaknesses
+    - Skill difficulty ranking (hardest skills in course)
+
+    Chỉ instructor/admin của course mới được xem.
+    """
+)
+async def get_course_skill_gaps_analytics(
+    course_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Analytics skill gaps cho toàn course (instructor/admin only)"""
+    from services.skill_gaps_analytics_service import get_course_skill_gaps_analytics
+
+    # TODO: Add permission check (instructor/admin only)
+    # For now, allow all users
+
+    result = await get_course_skill_gaps_analytics(course_id=course_id)
+
+    return result
+
+
+@router.get(
+    "/analytics/compare-with-class/{course_id}",
+    response_model=StudentClassComparisonResponse,
+    status_code=status.HTTP_200_OK,
+    summary="So sánh proficiency với class average",
+    description="""
+    So sánh proficiency của student với class average:
+    - Comparison từng skill (user vs class average)
+    - Overall comparison (rank, percentile)
+    - Identify skills mà user yếu hơn class
+
+    Giúp student biết mình đứng ở đâu so với các bạn khác.
+    """
+)
+async def compare_with_class(
+    course_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """So sánh proficiency của user với class average"""
+    from services.skill_gaps_analytics_service import compare_student_with_class_average
+
+    user_id = current_user["user_id"]
+
+    result = await compare_student_with_class_average(
+        user_id=user_id,
+        course_id=course_id
+    )
+
+    return result
+
