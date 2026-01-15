@@ -370,6 +370,7 @@ async def add_lesson_to_module(
         'course_id': course_id,
         'module_id': module_id,
         'title': lesson_data.title,
+        'description': getattr(lesson_data, 'description', None),
         'order': lesson_data.order,
         'content': lesson_data.content,
         'content_type': lesson_data.content_type,
@@ -380,8 +381,7 @@ async def add_lesson_to_module(
         'learning_objectives': getattr(lesson_data, 'learning_objectives', []),
         'simulation_html': getattr(lesson_data, 'simulation_html', None),
         'quiz_id': getattr(lesson_data, 'quiz_id', None),
-        'is_published': getattr(lesson_data, 'is_published', False),
-        'description': getattr(lesson_data, 'description', '')
+        'is_published': getattr(lesson_data, 'is_published', False)
     }
 
     lesson_doc = Lesson(**lesson_doc_data)
