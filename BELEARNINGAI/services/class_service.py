@@ -425,8 +425,9 @@ async def join_class_with_code(user_id: str, invite_code: str) -> Dict:
         ValueError: Nếu mã mời invalid hoặc lớp đầy
     """
     # Find class by invite code
-    cls = await Class.find_one(Class.invite_code == invite_code)
+    cls = await Class.find_one(Class.invite_code == invite_code.upper())
     
+
     if not cls:
         raise ValueError("Mã mời không hợp lệ")
     

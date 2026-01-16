@@ -76,7 +76,7 @@ async def create_course_from_ai_prompt(
             title=module_data.get("title"),
             description=module_data.get("description", ""),
             order=idx + 1,
-            difficulty=module_data.get("difficulty", "Basic"),
+            difficulty=module_data.get("difficulty", "easy"),
             estimated_hours=module_data.get("estimated_hours", 0),
             learning_outcomes=module_data.get("learning_outcomes", []),
             lessons=lessons,
@@ -382,7 +382,7 @@ async def update_personal_course(
                 title=module_data["title"],
                 description=module_data["description"],
                 order=module_data["order"],
-                difficulty=module_data.get("difficulty", "Basic"),
+                difficulty=module_data.get("difficulty", "easy"),
                 estimated_hours=module_data.get("estimated_hours", 0),
                 learning_outcomes=module_data.get("learning_outcomes", []),
                 lessons=lessons

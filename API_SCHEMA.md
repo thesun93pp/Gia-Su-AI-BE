@@ -546,6 +546,7 @@ limit: number (số khóa học mỗi trang, mặc định: 10, tối đa: 100)
       "avg_rating": "number (điểm đánh giá trung bình 0-5, có thể null)",
       "instructor_name": "string (tên giảng viên)",
       "instructor_avatar": "string (avatar giảng viên, có thể null)",
+      "instructor_bio": "string (tiểu sử giảng viên, có thể null)",
       "is_enrolled": "boolean (user hiện tại đã đăng ký chưa)",
       "created_at": "datetime"
     }
@@ -708,6 +709,7 @@ course_id: string (bắt buộc, UUID của khóa học cần xem)
   "status": "string (active)",
   "enrolled_at": "datetime (thời gian đăng ký)",
   "progress_percent": "number (0, khởi tạo với 0%)",
+  "completion_rate": "number (0, khởi tạo với 0% - alias của progress_percent)",
   "message": "string (Đăng ký khóa học thành công. Chúc bạn học tập hiệu quả!)"
 }
 ```
@@ -755,6 +757,7 @@ sort_order: string (asc|desc, mặc định: desc)
       "course_thumbnail": "string (URL ảnh đại diện)",
       "course_level": "string (Beginner|Intermediate|Advanced)",
       "instructor_name": "string",
+      "instructor_bio": "string (tiểu sử giảng viên, có thể null)",
       "status": "string (in-progress|completed|cancelled)",
       "progress_percent": "number (0-100, tiến độ hoàn thành)",
       "enrolled_at": "datetime (ngày đăng ký)",
@@ -800,6 +803,7 @@ sort_order: string (asc|desc, mặc định: desc)
   "course_description": "string",
   "course_thumbnail": "string (URL)",
   "instructor_name": "string",
+  "instructor_bio": "string (tiểu sử giảng viên, có thể null)",
   "status": "string (active|completed|cancelled)",
   "enrolled_at": "datetime (thời gian đăng ký)",
   "completed_at": "datetime (có thể null)",
@@ -858,1624 +862,13 @@ sort_order: string (asc|desc, mặc định: desc)
 
 ## 4. HỌC TẬP & THEO DÕI TIẾN ĐỘ (2.4)
 
-### 4.1 Xem chi tiết module và lessons
-**Endpoint:** `GET /api/v1/courses/{course_id}/modules/{module_id}`  
-**Router:** `learning_router.py` | **Controller:** `handle_get_module_detail`
-
-### 4.2 Xem nội dung bài học
-**Endpoint:** `GET /api/v1/courses/{course_id}/lessons/{lesson_id}`  
-**Router:** `learning_router.py` | **Controller:** `handle_get_lesson_content`
-
-### 4.3-4.7 Quiz System APIs
-**Endpoints:** `/api/v1/quizzes/{quiz_id}` (GET, POST attempt, GET results, POST retake)  
-**Router:** `quiz_router.py` | **Controllers:** handle_quiz_* functions
-
-### 4.8-4.9 Progress Tracking  
-**Endpoints:** `/api/v1/progress/course/{course_id}` (GET course progress)  
-**Router:** `progress_router.py` | **Controller:** `handle_get_course_progress`
-
----
-
-## 5. KHÓA HỌC CÁ NHÂN (2.5)
-
-### 5.1 Tạo khóa học từ AI Prompt
-**Endpoint:** `POST /api/v1/courses/from-prompt`  
-**Quyền:** Student  
-**Router:** `personal_courses_router.py`  
-**Controller:** `handle_create_course_from_prompt`
-
-**Mô tả:** Học viên chỉ cần nhập mô tả bằng ngôn ngữ tự nhiên về chủ đề và mục tiêu học tập, AI sẽ tự động tạo khóa học hoàn chỉnh. Ví dụ prompt: "Tôi muốn học lập trình Python cơ bản cho người mới bắt đầu, tập trung vào xử lý dữ liệu". AI sẽ sinh ra: (1) Danh sách modules được sắp xếp theo thứ tự logic từ cơ bản đến nâng cao, (2) Các lessons trong mỗi module với nội dung cụ thể, (3) Learning outcomes cho từng module, (4) Nội dung cơ bản cho mỗi lesson. Cơ chế: AI tạo ngay một bản draft trong database với status="draft". Học viên có thể chỉnh sửa bản draft này và publish khi hài lòng. Nếu F5 hoặc đóng trình duyệt, bản draft vẫn được lưu.
-
-**Request Schema:**
-```json
-{
-  "prompt": "string (bắt buộc, mô tả bằng ngôn ngữ tự nhiên, tối thiểu 20 ký tự)"
-}
-```
-
-**Response Schema (201 Created):**
-```json
-{
-  "course_id": "string (UUID khóa học được tạo)",
-  "title": "string (tiêu đề do AI sinh ra)",
-  "description": "string (mô tả do AI sinh ra)",
-  "category": "string (danh mục do AI xác định)",
-  "level": "string (Beginner|Intermediate|Advanced, do AI xác định)",
-  "status": "string (draft)",
-  "modules": [
-    {
-      "id": "string (UUID module)",
-      "title": "string (tiêu đề module do AI sinh)",
-      "description": "string (mô tả module)",
-      "order": "number (thứ tự module từ 1, 2, 3...)",
-      "difficulty": "string (Basic|Intermediate|Advanced)",
-      "learning_outcomes": [
-        "string (mục tiêu học tập của module)"
-      ],
-      "lessons": [
-        {
-          "id": "string (UUID lesson)",
-          "title": "string (tiêu đề lesson do AI sinh)",
-          "order": "number (thứ tự lesson trong module)",
-          "content_outline": "string (outline nội dung chính do AI sinh)"
-        }
-      ]
-    }
-  ],
-  "created_at": "datetime",
-  "message": "string (Khóa học draft đã được tạo, bạn có thể chỉnh sửa trước khi xuất bản)"
-}
-```
-
-**Error Response (400 Bad Request):**
-```json
-{
-  "detail": "string (Prompt too short - minimum 20 characters | Unable to generate course from prompt | AI service unavailable)"
-}
-```
-
-**Ghi chú:**
-- AI tạo ngay một bản draft trong database (status = "draft")
-- Học viên có thể chỉnh sửa bản draft này qua endpoint PUT /api/v1/courses/personal/{course_id}
-- Khi hài lòng, học viên có thể publish khóa học bằng cách update status = "published"
-- Nếu học viên F5 hoặc đóng trình duyệt, bản draft vẫn được lưu
-
----
-
-### 5.2 Tạo khóa học thủ công
-**Endpoint:** `POST /api/v1/courses/personal`  
-**Quyền:** Student  
-**Router:** `personal_courses_router.py`  
-**Controller:** `handle_create_personal_course`
-
-**Mô tả:** Tạo khóa học từ đầu với thông tin cơ bản do học viên tự nhập và tổ chức nội dung. Bước 1: Nhập thông tin cơ bản: tên khóa học, mô tả ngắn, danh mục (Programming, Math...), cấp độ. Bước 2: Hệ thống tạo khóa học trống với trạng thái "draft". Bước 3: Trả về course_id và chuyển đến trang quản lý để học viên tự thêm modules, lessons, và nội dung. Lợi ích: Kiểm soát hoàn toàn nội dung và cấu trúc khóa học theo ý muốn. Phù hợp cho người có kinh nghiệm hoặc muốn tạo khóa học độc đáo.
-
-**Request Schema:**
-```json
-{
-  "title": "string (bắt buộc, tối thiểu 5 ký tự, tối đa 200 ký tự)",
-  "description": "string (bắt buộc, tối thiểu 20 ký tự)",
-  "category": "string (bắt buộc: Programming|Math|Business|Languages|Other)",
-  "level": "string (bắt buộc: Beginner|Intermediate|Advanced)",
-  "thumbnail_url": "string (tùy chọn, URL ảnh đại diện)"
-}
-```
-
-**Response Schema (201 Created):**
-```json
-{
-  "id": "string (UUID khóa học)",
-  "title": "string",
-  "description": "string",
-  "category": "string",
-  "level": "string",
-  "status": "string (draft)",
-  "owner_id": "string (UUID học viên tạo)",
-  "created_at": "datetime",
-  "message": "string (Khóa học trống được tạo, hãy thêm modules và lessons)"
-}
-```
-
-**Error Response (400 Bad Request):**
-```json
-{
-  "detail": "string (Title too short | Description too short | Invalid category | Invalid level)"
-}
-```
-
----
-
-### 5.3 Xem danh sách khóa học cá nhân
-**Endpoint:** `GET /api/v1/courses/my-personal`  
-**Quyền:** Student  
-**Router:** `personal_courses_router.py`  
-**Controller:** `handle_list_my_personal_courses`
-
-**Mô tả:** Hiển thị tất cả khóa học do chính học viên tạo (từ AI hoặc thủ công). Phạm vi hiển thị: Khóa học cá nhân chỉ hiển thị cho người tạo và Admin. Không công khai, không chia sẻ được. Thông tin hiển thị: (1) Tên khóa học và hình ảnh, (2) Trạng thái: "draft" (nháp), "published" (đã hoàn thành), "archived" (lưu trữ), (3) Thống kê: số modules/lessons đã tạo, (4) Ngày tạo. Tính năng: (a) Filter theo trạng thái (draft/published/archived), (b) Tìm kiếm theo tên, (c) Mỗi item có các action: Xem chi tiết, Chỉnh sửa, Xóa.
-
-**Query Parameters:**
-```
-status: string (tùy chọn: draft|published|archived)
-search: string (tùy chọn, tìm kiếm theo tên khóa học)
-skip: number (mặc định: 0)
-limit: number (mặc định: 10, tối đa: 50)
-sort_by: string (created_at|updated_at|title, mặc định: created_at)
-sort_order: string (asc|desc, mặc định: desc)
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "courses": [
-    {
-      "id": "string (UUID)",
-      "title": "string",
-      "thumbnail_url": "string (có thể null)",
-      "status": "string (draft|published|archived)",
-      "category": "string",
-      "level": "string",
-      "module_count": "number (số modules đã tạo)",
-      "lesson_count": "number (số lessons đã tạo)",
-      "created_at": "datetime",
-      "updated_at": "datetime"
-    }
-  ],
-  "total": "number (tổng số khóa học)",
-  "skip": "number",
-  "limit": "number",
-  "summary": {
-    "draft_count": "number",
-    "published_count": "number",
-    "archived_count": "number"
-  }
-}
-```
-
----
-
-### 5.4 Chỉnh sửa khóa học cá nhân
-**Endpoint:** `PUT /api/v1/courses/personal/{course_id}`  
-**Quyền:** Student (owner)  
-**Router:** `personal_courses_router.py`  
-**Controller:** `handle_update_personal_course`
-
-**Mô tả:** Cho phép sửa đổi mọi thành phần của khóa học cá nhân: (1) Thay đổi tiêu đề, mô tả, hình ảnh khóa học, (2) Thêm/xóa/sắp xếp lại modules, (3) Thêm/xóa/chỉnh sửa nội dung lessons, (4) Cập nhật learning outcomes, (5) Thêm/xóa tài nguyên đính kèm. Giao diện: Cung cấp drag-and-drop để sắp xếp modules/lessons dễ dàng. Auto-save: Mọi thay đổi được tự động lưu sau 2-3 giây hoặc khi người dùng rời khỏi trường đang chỉnh sửa để tránh mất dữ liệu.
-
-**Request Schema:**
-```json
-{
-  "title": "string (tùy chọn)",
-  "description": "string (tùy chọn)",
-  "thumbnail_url": "string (tùy chọn)",
-  "category": "string (tùy chọn)",
-  "level": "string (tùy chọn)",
-  "status": "string (tùy chọn: draft|published|archived)",
-  "modules": [
-    {
-      "id": "string (UUID module, nếu cập nhật module cũ. Null nếu thêm mới)",
-      "title": "string (bắt buộc nếu có module)",
-      "description": "string (bắt buộc nếu có module)",
-      "order": "number (thứ tự module)",
-      "difficulty": "string (Basic|Intermediate|Advanced)",
-      "lessons": [
-        {
-          "id": "string (UUID lesson, nếu cập nhật. Null nếu thêm mới)",
-          "title": "string",
-          "content": "string (HTML hoặc markdown)",
-          "order": "number"
-        }
-      ]
-    }
-  ]
-}
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "id": "string (UUID)",
-  "title": "string",
-  "status": "string",
-  "updated_at": "datetime",
-  "message": "string (Khóa học đã được cập nhật)"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "detail": "string (Not the owner of this course | Cannot edit published course)"
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "detail": "string (Course not found)"
-}
-```
-
-**Ghi chú:**
-- Hỗ trợ drag-and-drop sắp xếp modules/lessons
-- Auto-save sau 2-3 giây
-
----
-
-### 5.5 Xóa khóa học cá nhân
-**Endpoint:** `DELETE /api/v1/courses/personal/{course_id}`  
-**Quyền:** Student (owner)  
-**Router:** `personal_courses_router.py`  
-**Controller:** `handle_delete_personal_course`
-
-**Mô tả:** Xóa vĩnh viễn khóa học đã tạo. Điều kiện: Chỉ cho phép xóa khóa học do chính học viên đó tạo (owner). Cảnh báo: Hiển thị dialog xác nhận rõ ràng về việc: (1) Xóa không thể khôi phục, (2) Tất cả nội dung, modules, lessons sẽ bị xóa. Kiểm tra: Backend kiểm tra ownership (quyền sở hữu) trước khi cho phép xóa.
-
-**Response Schema (200 OK):**
-```json
-{
-  "message": "string (Khóa học đã được xóa vĩnh viễn)",
-  "deleted_course_id": "string (UUID)",
-  "deleted_at": "datetime"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "detail": "string (Not the owner of this course | Cannot delete published course with enrollments)"
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "detail": "string (Course not found)"
-}
-```
-
----
-
-## 6. CHATBOT HỖ TRỢ AI (2.6)
-
-### 6.1 Chat hỏi đáp về khóa học
-**Endpoint:** `POST /api/v1/chat/course/{course_id}`  
-**Router:** `chat_router.py` | **Controller:** `handle_send_chat_message`
-
-### 6.2-6.5 Quản lý lịch sử chat
-**Endpoints:** GET history, GET conversations/{id}, DELETE operations  
-**Router:** `chat_router.py`
-
----
-
-## 7. DASHBOARD & PHÂN TÍCH HỌC VIÊN (2.7)
-
-### 7.1 Dashboard tổng quan học viên
-**Endpoint:** `GET /api/v1/dashboard/student`  
-**Router:** `dashboard_router.py` | **Controller:** `handle_get_student_dashboard`
-
-### 7.2 Thống kê học tập cá nhân
-**Endpoint:** `GET /api/v1/analytics/learning-stats`  
-**Quyền:** Student  
-**Router:** `analytics_router.py`  
-**Controller:** `handle_get_learning_stats`
-
-**Mô tả:** Thống kê tổng quan hoạt động học tập của học viên.
-
-**Response Schema (200 OK):**
-```json
-{
-  "user_id": "string (UUID)",
-  "summary": {
-    "total_courses_enrolled": "number",
-    "completed_courses": "number",
-    "total_study_hours": "number",
-    "current_streak_days": "number",
-    "longest_streak_days": "number"
-  },
-  "this_week": {
-    "study_hours": "number",
-    "lessons_completed": "number",
-    "quiz_attempts": "number",
-    "average_score": "number (0-100)"
-  },
-  "skill_progress": [
-    {
-      "skill_tag": "string",
-      "level": "string (Beginner|Intermediate|Advanced)",
-      "progress": "number (0-100%)"
-    }
-  ]
-}
-```
-
----
-
-### 7.3 Biểu đồ tiến độ học tập
-**Endpoint:** `GET /api/v1/analytics/progress-chart`  
-**Quyền:** Student  
-**Router:** `analytics_router.py`  
-**Controller:** `handle_get_progress_chart`
-
-**Mô tả:** Dữ liệu vẽ biểu đồ tiến độ học tập theo thời gian.
-
-**Query Parameters:**
-```
-period: string (7days|30days|90days|1year, mặc định: 30days)
-type: string (hours|lessons|quizzes, mặc định: hours)
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "period": "string",
-  "type": "string", 
-  "data_points": [
-    {
-      "date": "date (YYYY-MM-DD)",
-      "value": "number",
-      "label": "string (optional description)"
-    }
-  ],
-  "summary": {
-    "total_in_period": "number",
-    "average_per_day": "number",
-    "best_day": {
-      "date": "date",
-      "value": "number"
-    }
-  }
-}
-```
-
----
-
-### 7.4 Gợi ý khóa học
-**Endpoint:** `GET /api/v1/recommendations`  
-**Quyền:** Student  
-**Router:** `recommendation_router.py`  
-**Controller:** `handle_get_recommendations`
-
-**Mô tả:** AI gợi ý khóa học phù hợp dựa trên lịch sử học tập và skill gaps.
-
-**Response Schema (200 OK):**
-```json
-{
-  "user_id": "string (UUID)",
-  "recommendations": [
-    {
-      "course_id": "string (UUID)",
-      "title": "string",
-      "description": "string",
-      "level": "string (Beginner|Intermediate|Advanced)",
-      "estimated_hours": "number",
-      "match_percentage": "number (0-100%)",
-      "reason": "string (lý do gợi ý)",
-      "skill_tags": ["string array"],
-      "rating": "number (0-5.0)"
-    }
-  ],
-  "based_on": {
-    "completed_courses": "number",
-    "skill_gaps": ["string array"],
-    "learning_preferences": ["string array"]
-  }
-}
-```
-
----
-
-## 8.X ANALYTICS CHO GIẢNG VIÊN (3.4)
-
-### 8.11 Thống kê lớp học của giảng viên
-**Endpoint:** `GET /api/v1/analytics/instructor/classes`  
-**Quyền:** Instructor  
-**Router:** `analytics_router.py`  
-**Controller:** `handle_get_instructor_class_stats`
-
-**Mô tả:** Tổng quan các lớp học và hiệu suất giảng dạy.
-
-**Response Schema (200 OK):**
-```json
-{
-  "instructor_id": "string (UUID)",
-  "summary": {
-    "total_classes": "number",
-    "active_classes": "number", 
-    "total_students": "number",
-    "average_completion_rate": "number (0-100%)"
-  },
-  "class_performance": [
-    {
-      "class_id": "string (UUID)",
-      "class_name": "string",
-      "student_count": "number",
-      "average_progress": "number (0-100%)",
-      "completion_rate": "number (0-100%)",
-      "average_quiz_score": "number (0-100)"
-    }
-  ]
-}
-```
-
----
-
-### 8.12 Biểu đồ tiến độ lớp học
-**Endpoint:** `GET /api/v1/analytics/instructor/progress-chart`  
-**Quyền:** Instructor  
-**Router:** `analytics_router.py`  
-**Controller:** `handle_get_instructor_progress_chart`
-
-**Mô tả:** Biểu đồ tiến độ học tập của tất cả lớp học theo thời gian.
-
-**Query Parameters:**
-```
-class_id: string (UUID, tùy chọn - lọc theo lớp cụ thể)
-period: string (7days|30days|90days, mặc định: 30days)
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "period": "string",
-  "class_data": [
-    {
-      "class_id": "string (UUID)",
-      "class_name": "string",
-      "daily_progress": [
-        {
-          "date": "date (YYYY-MM-DD)",
-          "completed_lessons": "number",
-          "quiz_attempts": "number",
-          "average_score": "number"
-        }
-      ]
-    }
-  ]
-}
-```
-
----
-
-### 8.13 Phân tích hiệu suất quiz
-**Endpoint:** `GET /api/v1/analytics/instructor/quiz-performance`  
-**Quyền:** Instructor  
-**Router:** `analytics_router.py`  
-**Controller:** `handle_get_instructor_quiz_performance`
-
-**Mô tả:** Phân tích chi tiết hiệu suất các quiz do giảng viên tạo.
-
-**Query Parameters:**
-```
-class_id: string (UUID, tùy chọn)
-quiz_id: string (UUID, tùy chọn)
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "quiz_analytics": [
-    {
-      "quiz_id": "string (UUID)",
-      "quiz_title": "string",
-      "class_name": "string",
-      "statistics": {
-        "total_attempts": "number",
-        "pass_rate": "number (0-100%)",
-        "average_score": "number (0-100)",
-        "average_time": "number (seconds)"
-      },
-      "question_analysis": [
-        {
-          "question_id": "string",
-          "question_text": "string",
-          "correct_rate": "number (0-100%)",
-          "common_wrong_answers": ["string array"]
-        }
-      ]
-    }
-  ]
-}
-```
-
----
-
-## 8. QUẢN LÝ GIẢNG VIÊN (3.x)
-
-### 8.1 Tạo lớp học mới
-**Endpoint:** `POST /api/v1/classes`  
-**Quyền:** Instructor  
-**Router:** `classes_router.py`  
-**Controller:** `handle_create_class`
-
-**Mô tả:** Giảng viên tạo lớp học mới với thông tin cơ bản và mã mời tự động.
-
-**Request Schema:**
-```json
-{
-  "name": "string (bắt buộc, tên lớp học)",
-  "description": "string (tùy chọn, mô tả lớp học)",
-  "course_id": "string (UUID khóa học liên kết)",
-  "max_students": "number (tối đa học viên, mặc định: 50)",
-  "start_date": "datetime (ngày bắt đầu)",
-  "end_date": "datetime (ngày kết thúc, tùy chọn)"
-}
-```
-
-**Response Schema (201 Created):**
-```json
-{
-  "class_id": "string (UUID)",
-  "name": "string",
-  "invite_code": "string (6-8 ký tự, auto-generated)",
-  "course_title": "string",
-  "student_count": 0,
-  "created_at": "datetime",
-  "message": "Lớp học đã được tạo thành công"
-}
-```
-
----
-
-### 8.2 Lấy danh sách lớp học của giảng viên
-**Endpoint:** `GET /api/v1/classes/my-classes`  
-**Quyền:** Instructor  
-**Router:** `classes_router.py`  
-**Controller:** `handle_list_my_classes`
-
-**Mô tả:** Hiển thị tất cả lớp học do giảng viên tạo và quản lý.
-
-**Query Parameters:**
-```
-status: string (active|completed|draft, tùy chọn)
-skip: number (pagination)
-limit: number (pagination)
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "data": [
-    {
-      "class_id": "string (UUID)",
-      "name": "string",
-      "course_title": "string", 
-      "student_count": "number",
-      "invite_code": "string",
-      "status": "string (active|completed)",
-      "start_date": "datetime",
-      "created_at": "datetime"
-    }
-  ],
-  "total": "number",
-  "skip": "number",
-  "limit": "number"
-}
-```
-
----
-
-### 8.3 Xem chi tiết lớp học
-**Endpoint:** `GET /api/v1/classes/{class_id}`  
-**Quyền:** Instructor (class owner)  
-**Router:** `classes_router.py`  
-**Controller:** `handle_get_class_detail`
-
-**Mô tả:** Thông tin chi tiết lớp học bao gồm danh sách học viên và tiến độ.
-
-**Response Schema (200 OK):**
-```json
-{
-  "class_id": "string (UUID)",
-  "name": "string",
-  "description": "string",
-  "course": {
-    "id": "string (UUID)",
-    "title": "string",
-    "module_count": "number"
-  },
-  "invite_code": "string",
-  "max_students": "number",
-  "student_count": "number",
-  "start_date": "datetime",
-  "end_date": "datetime",
-  "status": "string (active|completed)",
-  "recent_students": [
-    {
-      "student_id": "string (UUID)",
-      "student_name": "string",
-      "join_date": "datetime",
-      "progress": "number (0-100%)"
-    }
-  ],
-  "class_stats": {
-    "average_progress": "number (0-100%)",
-    "completed_students": "number",
-    "active_students": "number"
-  }
-}
-```
-
----
-
-### 8.4 Cập nhật thông tin lớp học
-**Endpoint:** `PUT /api/v1/classes/{class_id}`  
-**Quyền:** Instructor (class owner)  
-**Router:** `classes_router.py`  
-**Controller:** `handle_update_class`
-
-**Mô tả:** Chỉnh sửa tên, mô tả, số lượng học viên tối đa của lớp học.
-
-**Request Schema:**
-```json
-{
-  "name": "string (tùy chọn)",
-  "description": "string (tùy chọn)",
-  "max_students": "number (tùy chọn)",
-  "end_date": "datetime (tùy chọn)"
-}
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "class_id": "string (UUID)",
-  "message": "Thông tin lớp học đã được cập nhật",
-  "updated_at": "datetime"
-}
-```
-
----
-
-### 8.5 Xóa lớp học
-**Endpoint:** `DELETE /api/v1/classes/{class_id}`  
-**Quyền:** Instructor (class owner)  
-**Router:** `classes_router.py`  
-**Controller:** `handle_delete_class`
-
-**Mô tả:** Xóa lớp học vĩnh viễn (chỉ khi không có học viên hoặc tất cả học viên đã rời khỏi).
-
-**Response Schema (200 OK):**
-```json
-{
-  "message": "Lớp học đã được xóa thành công"
-}
-```
-
----
-
-### 8.6 Student tham gia lớp với mã mời
-**Endpoint:** `POST /api/v1/classes/join`  
-**Quyền:** Student  
-**Router:** `classes_router.py`  
-**Controller:** `handle_join_class_with_code`
-
-**Mô tả:** Học viên nhập mã mời để tham gia lớp học.
-
-**Request Schema:**
-```json
-{
-  "invite_code": "string (bắt buộc, 6-8 ký tự)"
-}
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "class_id": "string (UUID)",
-  "class_name": "string",
-  "course_title": "string",
-  "instructor_name": "string", 
-  "join_date": "datetime",
-  "message": "Bạn đã tham gia lớp học thành công"
-}
-```
-
----
-
-### 8.7 Lấy danh sách học viên trong lớp
-**Endpoint:** `GET /api/v1/classes/{class_id}/students`  
-**Quyền:** Instructor (class owner)  
-**Router:** `classes_router.py`  
-**Controller:** `handle_get_class_students`
-
-**Mô tả:** Hiển thị tất cả học viên trong lớp với tiến độ học tập chi tiết.
-
-**Query Parameters:**
-```
-sort_by: string (name|join_date|progress, mặc định: join_date)
-order: string (asc|desc, mặc định: desc)  
-skip: number (pagination)
-limit: number (pagination)
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "class_id": "string (UUID)",
-  "class_name": "string",
-  "data": [
-    {
-      "student_id": "string (UUID)",
-      "student_name": "string",
-      "email": "string",
-      "join_date": "datetime",
-      "progress": "number (0-100%)",
-      "completed_modules": "number",
-      "total_modules": "number",
-      "last_activity": "datetime",
-      "quiz_average": "number (0-100)"
-    }
-  ],
-  "total": "number",
-  "skip": "number", 
-  "limit": "number"
-}
-```
-
----
-
-### 8.8 Xem chi tiết học viên trong lớp
-**Endpoint:** `GET /api/v1/classes/{class_id}/students/{student_id}`  
-**Quyền:** Instructor (class owner)  
-**Router:** `classes_router.py`  
-**Controller:** `handle_get_student_detail`
-
-**Mô tả:** Thông tin chi tiết tiến độ học tập của một học viên cụ thể.
-
-**Response Schema (200 OK):**
-```json
-{
-  "student": {
-    "student_id": "string (UUID)",
-    "student_name": "string",
-    "email": "string",
-    "join_date": "datetime"
-  },
-  "progress": {
-    "overall_progress": "number (0-100%)",
-    "completed_modules": "number",
-    "total_modules": "number",
-    "study_streak_days": "number",
-    "total_study_time": "number (hours)"
-  },
-  "module_details": [
-    {
-      "module_id": "string (UUID)",
-      "module_title": "string", 
-      "progress": "number (0-100%)",
-      "completed_lessons": "number",
-      "quiz_scores": [
-        {
-          "quiz_id": "string (UUID)",
-          "quiz_title": "string",
-          "score": "number (0-100)",
-          "attempt_date": "datetime"
-        }
-      ]
-    }
-  ]
-}
-```
-
----
-
-### 8.9 Loại học viên khỏi lớp
-**Endpoint:** `DELETE /api/v1/classes/{class_id}/students/{student_id}`  
-**Quyền:** Instructor (class owner)  
-**Router:** `classes_router.py`  
-**Controller:** `handle_remove_student`
-
-**Mô tả:** Giảng viên loại học viên khỏi lớp học (học viên mất quyền truy cập).
-
-**Response Schema (200 OK):**
-```json
-{
-  "message": "Học viên đã được loại khỏi lớp học",
-  "student_name": "string",
-  "removed_at": "datetime"
-}
-```
-
----
-
-### 8.10 Xem tiến độ toàn lớp
-**Endpoint:** `GET /api/v1/classes/{class_id}/progress`  
-**Quyền:** Instructor (class owner)  
-**Router:** `classes_router.py`  
-**Controller:** `handle_get_class_progress`
-
-**Mô tả:** Tổng quan tiến độ học tập của cả lớp theo module và lesson.
-
-**Response Schema (200 OK):**
-```json
-{
-  "class_id": "string (UUID)",
-  "class_name": "string",
-  "overall_stats": {
-    "total_students": "number",
-    "average_progress": "number (0-100%)",
-    "completion_rate": "number (0-100%)",
-    "average_quiz_score": "number (0-100)"
-  },
-  "module_progress": [
-    {
-      "module_id": "string (UUID)",
-      "module_title": "string",
-      "students_completed": "number",
-      "completion_percentage": "number (0-100%)",
-      "average_score": "number (0-100)"
-    }
-  ]
-}
-```
-
----
-
-## 9. QUẢN LÝ HỆ THỐNG ADMIN (4.x)
-
-### 9.1 Xem danh sách người dùng
-**Endpoint:** `GET /api/v1/admin/users`  
-**Quyền:** Admin  
-**Router:** `admin_router.py`  
-**Controller:** `handle_list_users_admin`
-
-**Mô tả:** Admin xem tất cả người dùng trong hệ thống với bộ lọc và tìm kiếm.
-
-**Query Parameters:**
-```
-role: string (student|instructor|admin, tùy chọn)
-status: string (active|inactive|banned, tùy chọn)
-search: string (tìm kiếm theo tên, email, tùy chọn)
-sort_by: string (created_at|last_login|name, mặc định: created_at)
-order: string (asc|desc, mặc định: desc)
-skip: number (pagination)
-limit: number (pagination)
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "data": [
-    {
-      "user_id": "string (UUID)",
-      "full_name": "string",
-      "email": "string",
-      "role": "string (student|instructor|admin)",
-      "status": "string (active|inactive|banned)",
-      "created_at": "datetime",
-      "last_login": "datetime",
-      "courses_enrolled": "number (chỉ student)",
-      "classes_created": "number (chỉ instructor)"
-    }
-  ],
-  "total": "number",
-  "skip": "number",
-  "limit": "number",
-  "summary": {
-    "total_users": "number",
-    "active_users": "number",
-    "new_users_this_month": "number"
-  }
-}
-```
-
----
-
-### 9.2 Xem chi tiết người dùng
-**Endpoint:** `GET /api/v1/admin/users/{user_id}`  
-**Quyền:** Admin  
-**Router:** `admin_router.py`  
-**Controller:** `handle_get_user_detail_admin`
-
-**Mô tả:** Admin xem thông tin chi tiết của một người dùng cụ thể.
-
-**Response Schema (200 OK):**
-```json
-{
-  "user_id": "string (UUID)",
-  "full_name": "string",
-  "email": "string",
-  "role": "string (student|instructor|admin)",
-  "status": "string (active|inactive|banned)",
-  "created_at": "datetime",
-  "last_login": "datetime",
-  "profile": {
-    "phone": "string (tùy chọn)",
-    "bio": "string (tùy chọn)",
-    "avatar_url": "string (tùy chọn)"
-  },
-  "activity_summary": {
-    "courses_enrolled": "number",
-    "classes_created": "number",
-    "total_study_hours": "number",
-    "login_streak_days": "number"
-  }
-}
-```
-
----
-
-### 9.3 Tạo người dùng mới
-**Endpoint:** `POST /api/v1/admin/users`  
-**Quyền:** Admin  
-**Router:** `admin_router.py`  
-**Controller:** `handle_create_user_admin`
-
-**Mô tả:** Admin tạo tài khoản mới cho người dùng.
-
-**Request Schema:**
-```json
-{
-  "full_name": "string (bắt buộc)",
-  "email": "string (bắt buộc, unique)",
-  "password": "string (bắt buộc, tối thiểu 8 ký tự)",
-  "role": "string (student|instructor|admin, mặc định: student)",
-  "status": "string (active|inactive, mặc định: active)"
-}
-```
-
-**Response Schema (201 Created):**
-```json
-{
-  "user_id": "string (UUID)",
-  "full_name": "string",
-  "email": "string",
-  "role": "string",
-  "status": "string",
-  "created_at": "datetime",
-  "message": "Tài khoản người dùng đã được tạo thành công"
-}
-```
-
----
-
-### 9.4 Cập nhật thông tin người dùng
-**Endpoint:** `PUT /api/v1/admin/users/{user_id}`  
-**Quyền:** Admin  
-**Router:** `admin_router.py`  
-**Controller:** `handle_update_user_admin`
-
-**Mô tả:** Admin chỉnh sửa thông tin người dùng.
-
-**Request Schema:**
-```json
-{
-  "full_name": "string (tùy chọn)",
-  "email": "string (tùy chọn)",
-  "status": "string (active|inactive|banned, tùy chọn)"
-}
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "user_id": "string (UUID)",
-  "message": "Thông tin người dùng đã được cập nhật",
-  "updated_at": "datetime"
-}
-```
-
----
-
-### 9.5 Xóa người dùng
-**Endpoint:** `DELETE /api/v1/admin/users/{user_id}`  
-**Quyền:** Admin  
-**Router:** `admin_router.py`  
-**Controller:** `handle_delete_user_admin`
-
-**Mô tả:** Admin xóa tài khoản người dùng vĩnh viễn.
-
-**Response Schema (200 OK):**
-```json
-{
-  "message": "Tài khoản người dùng đã được xóa vĩnh viễn"
-}
-```
-
----
-
-### 9.6 Thay đổi vai trò người dùng
-**Endpoint:** `PUT /api/v1/admin/users/{user_id}/role`  
-**Quyền:** Admin  
-**Router:** `admin_router.py`  
-**Controller:** `handle_change_user_role_admin`
-
-**Mô tả:** Admin thay đổi vai trò của người dùng.
-
-**Request Schema:**
-```json
-{
-  "new_role": "string (student|instructor|admin, bắt buộc)"
-}
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "user_id": "string (UUID)",
-  "old_role": "string",
-  "new_role": "string",
-  "message": "Vai trò người dùng đã được thay đổi",
-  "updated_at": "datetime"
-}
-```
-
----
-
-### 9.7 Đặt lại mật khẩu người dùng
-**Endpoint:** `POST /api/v1/admin/users/{user_id}/reset-password`  
-**Quyền:** Admin  
-**Router:** `admin_router.py`  
-**Controller:** `handle_reset_user_password_admin`
-
-**Mô tả:** Admin đặt lại mật khẩu cho người dùng.
-
-**Request Schema:**
-```json
-{
-  "new_password": "string (bắt buộc, tối thiểu 8 ký tự)"
-}
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "user_id": "string (UUID)",
-  "message": "Mật khẩu đã được đặt lại thành công",
-  "updated_at": "datetime"
-}
-```
-
----
-
-## 9.X QUẢN LÝ KHÓA HỌC ADMIN (4.2)
-
-### 9.8 Xem danh sách khóa học
-**Endpoint:** `GET /api/v1/admin/courses`  
-**Quyền:** Admin  
-**Router:** `admin_router.py`  
-**Controller:** `handle_list_courses_admin`
-
-**Mô tả:** Admin xem tất cả khóa học trong hệ thống.
-
-**Query Parameters:**
-```
-status: string (active|draft|archived, tùy chọn)
-creator_id: string (UUID, tùy chọn - lọc theo người tạo)
-category: string (danh mục, tùy chọn)
-sort_by: string (created_at|enrollment_count|title, mặc định: created_at)
-order: string (asc|desc, mặc định: desc)
-skip: number (pagination)
-limit: number (pagination)
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "data": [
-    {
-      "course_id": "string (UUID)",
-      "title": "string",
-      "creator_name": "string",
-      "category": "string",
-      "level": "string",
-      "status": "string (active|draft|archived)",
-      "enrollment_count": "number",
-      "created_at": "datetime",
-      "last_updated": "datetime"
-    }
-  ],
-  "total": "number",
-  "skip": "number",
-  "limit": "number"
-}
-```
-
----
-
-### 9.9 Xem chi tiết khóa học
-**Endpoint:** `GET /api/v1/admin/courses/{course_id}`  
-**Quyền:** Admin  
-**Router:** `admin_router.py`  
-**Controller:** `handle_get_course_detail_admin`
-
-**Mô tả:** Admin xem thông tin chi tiết khóa học và thống kê.
-
-**Response Schema (200 OK):**
-```json
-{
-  "course_id": "string (UUID)",
-  "title": "string",
-  "description": "string",
-  "creator": {
-    "user_id": "string (UUID)",
-    "full_name": "string",
-    "email": "string"
-  },
-  "category": "string",
-  "level": "string",
-  "status": "string",
-  "enrollment_stats": {
-    "total_enrollments": "number",
-    "active_students": "number",
-    "completion_rate": "number (0-100%)"
-  },
-  "content_stats": {
-    "total_modules": "number",
-    "total_lessons": "number",
-    "total_quizzes": "number"
-  },
-  "created_at": "datetime",
-  "last_updated": "datetime"
-}
-```
-
----
-
-### 9.10 Tạo khóa học mới
-**Endpoint:** `POST /api/v1/admin/courses`  
-**Quyền:** Admin  
-**Router:** `admin_router.py`  
-**Controller:** `handle_create_course_admin`
-
-**Mô tả:** Admin tạo khóa học mới thay mặt cho giảng viên.
-
-**Request Schema:**
-```json
-{
-  "title": "string (bắt buộc)",
-  "description": "string (bắt buộc)",
-  "creator_id": "string (UUID giảng viên, bắt buộc)",
-  "category": "string (bắt buộc)",
-  "level": "string (Beginner|Intermediate|Advanced, bắt buộc)",
-  "status": "string (active|draft, mặc định: draft)"
-}
-```
-
-**Response Schema (201 Created):**
-```json
-{
-  "course_id": "string (UUID)",
-  "title": "string",
-  "creator_name": "string",
-  "status": "string",
-  "created_at": "datetime",
-  "message": "Khóa học đã được tạo thành công"
-}
-```
-
----
-
-### 9.11 Cập nhật khóa học
-**Endpoint:** `PUT /api/v1/admin/courses/{course_id}`  
-**Quyền:** Admin  
-**Router:** `admin_router.py`  
-**Controller:** `handle_update_course_admin`
-
-**Mô tả:** Admin chỉnh sửa thông tin khóa học.
-
-**Request Schema:**
-```json
-{
-  "title": "string (tùy chọn)",
-  "description": "string (tùy chọn)",
-  "category": "string (tùy chọn)",
-  "level": "string (tùy chọn)",
-  "status": "string (active|draft|archived, tùy chọn)"
-}
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "course_id": "string (UUID)",
-  "message": "Khóa học đã được cập nhật",
-  "updated_at": "datetime"
-}
-```
-
----
-
-### 9.12 Xóa khóa học
-**Endpoint:** `DELETE /api/v1/admin/courses/{course_id}`  
-**Quyền:** Admin  
-**Router:** `admin_router.py`  
-**Controller:** `handle_delete_course_admin`
-
-**Mô tả:** Admin xóa khóa học vĩnh viễn (chỉ khi không có học viên đang học).
-
-**Response Schema (200 OK):**
-```json
-{
-  "message": "Khóa học đã được xóa vĩnh viễn"
-}
-```
-
----
-
-## 9.X GIÁM SÁT LỚP HỌC ADMIN (4.3)
-
-### 9.13 Xem danh sách lớp học
-**Endpoint:** `GET /api/v1/admin/classes`  
-**Quyền:** Admin  
-**Router:** `admin_router.py`  
-**Controller:** `handle_list_classes_admin`
-
-**Mô tả:** Admin xem tất cả lớp học trong hệ thống.
-
-**Query Parameters:**
-```
-status: string (active|completed, tùy chọn)
-instructor_id: string (UUID, tùy chọn - lọc theo giảng viên)
-course_id: string (UUID, tùy chọn - lọc theo khóa học)
-sort_by: string (created_at|student_count|name, mặc định: created_at)
-order: string (asc|desc, mặc định: desc)
-skip: number (pagination)
-limit: number (pagination)
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "data": [
-    {
-      "class_id": "string (UUID)",
-      "class_name": "string",
-      "course_title": "string",
-      "instructor_name": "string",
-      "student_count": "number",
-      "status": "string (active|completed)",
-      "created_at": "datetime"
-    }
-  ],
-  "total": "number",
-  "skip": "number",
-  "limit": "number"
-}
-```
-
----
-
-### 9.14 Xem chi tiết lớp học
-**Endpoint:** `GET /api/v1/admin/classes/{class_id}`  
-**Quyền:** Admin  
-**Router:** `admin_router.py`  
-**Controller:** `handle_get_class_detail_admin`
-
-**Mô tả:** Admin xem thông tin chi tiết lớp học và thống kê.
-
-**Response Schema (200 OK):**
-```json
-{
-  "class_id": "string (UUID)",
-  "class_name": "string",
-  "course": {
-    "course_id": "string (UUID)",
-    "title": "string",
-    "category": "string"
-  },
-  "instructor": {
-    "user_id": "string (UUID)",
-    "full_name": "string",
-    "email": "string"
-  },
-  "student_count": "number",
-  "invite_code": "string",
-  "status": "string",
-  "class_stats": {
-    "average_progress": "number (0-100%)",
-    "completion_rate": "number (0-100%)",
-    "active_students_today": "number"
-  },
-  "created_at": "datetime",
-  "start_date": "datetime",
-  "end_date": "datetime"
-}
-```
-
----
-
-### 9.2 Xem dashboard admin tổng quan
-**Endpoint:** `GET /api/v1/admin/dashboard`  
-**Quyền:** Admin  
-**Router:** `dashboard_router.py`  
-**Controller:** `handle_get_admin_dashboard`
-
-**Mô tả:** Thống kê tổng quan toàn hệ thống cho admin.
-
-**Response Schema (200 OK):**
-```json
-{
-  "system_stats": {
-    "total_users": "number",
-    "total_courses": "number", 
-    "total_classes": "number",
-    "total_enrollments": "number"
-  },
-  "growth_metrics": {
-    "new_users_today": "number",
-    "new_users_this_week": "number",
-    "new_courses_this_month": "number",
-    "active_users_today": "number"
-  },
-  "popular_courses": [
-    {
-      "course_id": "string (UUID)",
-      "title": "string",
-      "enrollment_count": "number",
-      "completion_rate": "number (0-100%)"
-    }
-  ],
-  "recent_activities": [
-    {
-      "type": "string (user_registered|course_created|class_created)",
-      "description": "string",
-      "timestamp": "datetime"
-    }
-  ]
-}
-```
-
----
-
-### 9.3 Xem dashboard giảng viên
-**Endpoint:** `GET /api/v1/dashboard/instructor`  
-**Quyền:** Instructor  
-**Router:** `dashboard_router.py`  
-**Controller:** `handle_get_instructor_dashboard`
-
-**Mô tả:** Dashboard tổng quan cho giảng viên về các lớp học và học viên.
-
-**Response Schema (200 OK):**
-```json
-{
-  "instructor_id": "string (UUID)",
-  "overview": {
-    "total_classes": "number",
-    "total_students": "number",
-    "active_classes": "number",
-    "average_completion_rate": "number (0-100%)"
-  },
-  "recent_classes": [
-    {
-      "class_id": "string (UUID)",
-      "class_name": "string",
-      "student_count": "number",
-      "recent_activity": "datetime"
-    }
-  ],
-  "student_activities": [
-    {
-      "student_name": "string",
-      "class_name": "string", 
-      "activity": "string (completed_lesson|passed_quiz)",
-      "timestamp": "datetime"
-    }
-  ],
-  "upcoming_deadlines": [
-    {
-      "class_name": "string",
-      "task": "string",
-      "due_date": "datetime"
-    }
-  ]
-}
-```
-
----
-
-## 9.X ADMIN ANALYTICS (4.4)
-
-### 9.4 Thống kê tăng trưởng người dùng
-**Endpoint:** `GET /api/v1/admin/analytics/users-growth`  
-**Quyền:** Admin  
-**Router:** `analytics_router.py`  
-**Controller:** `handle_get_admin_users_growth`
-
-**Mô tả:** Biểu đồ tăng trưởng người dùng theo thời gian.
-
-**Query Parameters:**
-```
-period: string (30days|90days|1year, mặc định: 90days)
-group_by: string (day|week|month, mặc định: week)
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "period": "string",
-  "growth_data": [
-    {
-      "date": "date (YYYY-MM-DD)",
-      "new_users": "number",
-      "total_users": "number",
-      "new_students": "number",
-      "new_instructors": "number"
-    }
-  ],
-  "summary": {
-    "total_growth_rate": "number (%)",
-    "average_daily_signups": "number",
-    "peak_signup_day": {
-      "date": "date",
-      "count": "number"
-    }
-  }
-}
-```
-
----
-
-### 9.5 Thống kê khóa học hệ thống
-**Endpoint:** `GET /api/v1/admin/analytics/courses`  
-**Quyền:** Admin  
-**Router:** `analytics_router.py`  
-**Controller:** `handle_get_admin_courses_analytics`
-
-**Mô tả:** Phân tích hiệu suất các khóa học trong hệ thống.
-
-**Response Schema (200 OK):**
-```json
-{
-  "course_metrics": {
-    "total_courses": "number",
-    "public_courses": "number", 
-    "personal_courses": "number",
-    "average_enrollment_per_course": "number"
-  },
-  "top_courses": [
-    {
-      "course_id": "string (UUID)",
-      "title": "string",
-      "creator": "string (instructor name)",
-      "enrollment_count": "number",
-      "completion_rate": "number (0-100%)",
-      "average_rating": "number (0-5.0)"
-    }
-  ],
-  "category_breakdown": [
-    {
-      "category": "string",
-      "course_count": "number",
-      "total_enrollments": "number"
-    }
-  ]
-}
-```
-
----
-
-### 9.6 Giám sát sức khỏe hệ thống
-**Endpoint:** `GET /api/v1/admin/analytics/system-health`  
-**Quyền:** Admin  
-**Router:** `analytics_router.py`  
-**Controller:** `handle_get_admin_system_health`
-
-**Mô tả:** Thống kê tình trạng hoạt động và hiệu suất hệ thống.
-
-**Response Schema (200 OK):**
-```json
-{
-  "system_status": "string (healthy|warning|critical)",
-  "performance_metrics": {
-    "average_response_time": "number (ms)",
-    "api_success_rate": "number (0-100%)",
-    "concurrent_users": "number",
-    "server_uptime": "number (hours)"
-  },
-  "resource_usage": {
-    "database_size": "number (MB)",
-    "storage_used": "number (GB)",
-    "memory_usage": "number (%)",
-    "cpu_usage": "number (%)"
-  },
-  "recent_errors": [
-    {
-      "error_type": "string",
-      "count": "number",
-      "last_occurrence": "datetime"
-    }
-  ]
-}
-```
-
----
-
-## 10. CHỨC NĂNG CHUNG (5.x)
-
-### 10.1 Tìm kiếm toàn cầu
-**Endpoint:** `GET /api/v1/search`  
-**Quyền:** All roles  
-**Router:** `search_router.py`  
-**Controller:** `handle_global_search`
-
-**Mô tả:** Tìm kiếm thông minh tất cả nội dung: khóa học, lớp học, người dùng, bài học.
-
-**Query Parameters:**
-```
-q: string (từ khóa tìm kiếm, bắt buộc)
-type: string (courses|classes|users|lessons, tùy chọn - lọc loại kết quả)
-category: string (danh mục khóa học, tùy chọn)
-level: string (Beginner|Intermediate|Advanced, tùy chọn)
-skip: number (pagination)
-limit: number (pagination, tối đa: 50)
-```
-
-**Response Schema (200 OK):**
-```json
-{
-  "query": "string",
-  "total_results": "number",
-  "results": [
-    {
-      "type": "string (course|class|user|lesson)",
-      "id": "string (UUID)",
-      "title": "string",
-      "description": "string",
-      "thumbnail_url": "string (tùy chọn)",
-      "relevance_score": "number (0-100)",
-      "highlight": "string (đoạn text có từ khóa được highlight)"
-    }
-  ],
-  "suggestions": ["string array (gợi ý từ khóa liên quan)"],
-  "filters": {
-    "available_categories": ["string array"],
-    "available_levels": ["string array"]
-  }
-}
-```
-
----
-
----
-
-## GHI CHÚ QUAN TRỌNG
-
-**Naming Conventions:**
-- Tất cả path parameters sử dụng snake_case: `{course_id}`, `{module_id}`, `{lesson_id}`  
-- Pagination: `skip` và `limit` (MongoDB style)  
-- All UUIDs: UUID v4 format  
-
-**Data Formats:**
-- DateTime: ISO 8601 format với UTC timezone  
-- Content-Type: application/json  
-- Access Token: Bearer JWT (15 phút)  
-- Refresh Token: JWT (7 ngày)
-
-**Response Messages:**
-- Luôn có `message` field cho POST, PUT, DELETE operations  
-- Luôn có `detail` field cho error responses (4xx, 5xx)  
-- Tiếng Việt trong tất cả user-facing messages
-
-**Router Summary:**
-- 16 routers tổng cộng theo ENDPOINTS_MAPPING.md  
-- 84 API endpoints đã được chuẩn hóa  
-- Tuân thủ nghiêm ngặt theo CHUCNANG.md structure
-
-**Response Schema (200 OK):**
-```json
-{
-  "message": "string (Hủy đăng ký khóa học thành công)",
-  "note": "string (Dữ liệu học tập của bạn đã được lưu lại)"
-}
-```
-
----
-
-## 4. HỌC TẬP & THEO DÕI TIẾN ĐỘ (2.4)
-
 ### 4.1 Xem thông tin module
 **Endpoint:** `GET /api/v1/courses/{course_id}/modules/{module_id}`  
 **Quyền:** Student (enrolled)  
 **Router:** `learning_router.py`  
 **Controller:** `handle_get_module_detail`
 
-**Mô tả:** Hiển thị thông tin chi tiết về một module trong khóa học: (1) Tiêu đề và mô tả module, (2) Cấp độ khó (Basic/Intermediate/Advanced), (3) Danh sách tất cả lessons trong module theo thứ tự, (4) Mục tiêu học tập (Learning Outcomes) của module, (5) Thời lượng học ước tính, (6) Tài nguyên đính kèm (PDF, slides, code samples), (7) Trạng thái hoàn thành của từng lesson.
-
-**Path Parameters:**
-```
-course_id: string (bắt buộc, UUID của khóa học)
-module_id: string (bắt buộc, UUID của module)
-```
+**Mô tả:** Hiển thị thông tin chi tiết về một module trong khóa học.
 
 **Response Schema (200 OK):**
 ```json
@@ -2489,15 +882,12 @@ module_id: string (bắt buộc, UUID của module)
   "estimated_hours": "number (thời lượng học tập ước tính)",
   "learning_outcomes": [
     {
-      "description": "string (mục tiêu học tập cụ thể, đo lường được)",
-      "skill_tag": "string (kỹ năng liên quan, ví dụ: python-syntax)",
-      "is_mandatory": "boolean (có phải kiến thức bắt buộc không)"
+      "id": "string (UUID)",
+      "outcome": "string (mô tả mục tiêu học tập cụ thể)",
+      "skill_tag": "string (tag kỹ năng, vd: 'python-functions')",
+      "is_mandatory": "boolean (kiến thức bắt buộc hay tùy chọn)"
     }
   ],
-  "prerequisites": [
-    "string (UUID của các modules tiên quyết cần hoàn thành trước)"
-  ],
-  "pass_threshold": "number (điểm pass tối thiểu %, thường là 70)",
   "lessons": [
     {
       "id": "string (UUID lesson)",
@@ -2519,12 +909,14 @@ module_id: string (bắt buộc, UUID của module)
       "is_mandatory": "boolean"
     }
   ],
-  "progress_info": {
-    "total_lessons": "number (tổng số bài học)",
-    "completed_lessons": "number (số bài đã hoàn thành)",
-    "progress_percent": "number (0-100, tiến độ hoàn thành module)",
-    "is_accessible": "boolean (có thể truy cập hay cần hoàn thành module trước)"
-  },
+  "completion_status": "string (not-started|in-progress|completed)",
+  "completed_lessons": "number (số bài đã hoàn thành)",
+  "total_lessons": "number (tổng số bài học)",
+  "progress_percent": "number (0-100, tiến độ hoàn thành module)",
+  "is_accessible": "boolean (có thể truy cập hay cần hoàn thành module trước)",
+  "prerequisites": [
+    "string (UUID các module tiên quyết)"
+  ],
   "created_at": "datetime",
   "updated_at": "datetime"
 }
@@ -2554,6 +946,8 @@ module_id: string (bắt buộc, UUID của module)
 
 **Mô tả:** Truy cập và học nội dung của một lesson cụ thể. Các loại nội dung: (1) Nội dung text/HTML (bài giảng, giải thích lý thuyết), (2) Video bài giảng với player hỗ trợ tua, tốc độ phát, (3) Tài liệu đính kèm (PDF, Word, code files). Tracking tự động: Hệ thống ghi nhận thời gian học, phần nào đã xem. Tự động đánh dấu phần đã hoàn thành khi học viên xem hết.
 
+**FIXED (Dec 07, 2025):** Response structure đã được cập nhật với navigation nested objects và quiz_info structure đầy đủ hơn.
+
 **Path Parameters:**
 ```
 course_id: string (bắt buộc, UUID của khóa học)
@@ -2576,6 +970,15 @@ lesson_id: string (bắt buộc, UUID của lesson)
     "video_url": "string (URL video bài giảng, có thể null)",
     "video_duration": "number (thời lượng video tính bằng giây, có thể null)",
     "video_thumbnail": "string (URL ảnh thumbnail video, có thể null)",
+    "attachments": [
+      {
+        "id": "string (UUID tài liệu đính kèm)",
+        "name": "string (tên file)",
+        "type": "string (pdf|word|pptx|code|external_link)",
+        "url": "string (link download hoặc xem)",
+        "size": "number (kích thước file bytes, null cho external link)"
+      }
+    ],
     "code_snippets": [
       {
         "language": "string (python|javascript|java|...)",
@@ -2584,6 +987,9 @@ lesson_id: string (bắt buộc, UUID của lesson)
       }
     ]
   },
+  "learning_objectives": [
+    "string (mục tiêu cụ thể của bài học này)"
+  ],
   "resources": [
     {
       "id": "string (UUID)",
@@ -2595,13 +1001,10 @@ lesson_id: string (bắt buộc, UUID của lesson)
       "is_downloadable": "boolean"
     }
   ],
-  "learning_objectives": [
-    "string (mục tiêu cụ thể của bài học này)"
-  ],
   "has_quiz": "boolean (bài học có quiz kèm theo không)",
   "quiz_info": {
     "quiz_id": "string (UUID quiz, null nếu has_quiz=false)",
-    "question_count": "number (số câu hỏi, null nếu has_quiz=false)",
+    "question_count": "number (số câu hỏi trong quiz, null nếu has_quiz=false)",
     "is_mandatory": "boolean (bắt buộc làm quiz để tiếp tục, null nếu has_quiz=false)"
   },
   "completion_status": {
@@ -2613,16 +1016,16 @@ lesson_id: string (bắt buộc, UUID của lesson)
   "navigation": {
     "previous_lesson": {
       "id": "string (UUID, null nếu là lesson đầu tiên)",
-      "title": "string (null nếu là lesson đầu tiên)"
+      "title": "string (tiêu đề lesson trước, null nếu là lesson đầu tiên)"
     },
     "next_lesson": {
       "id": "string (UUID, null nếu là lesson cuối hoặc chưa unlock)",
-      "title": "string (null nếu là lesson cuối hoặc chưa unlock)",
+      "title": "string (tiêu đề lesson kế tiếp, null nếu là lesson cuối hoặc chưa unlock)",
       "is_locked": "boolean (có bị khóa không, cần hoàn thành lesson hiện tại)"
     }
   },
-  "created_at": "datetime",
-  "updated_at": "datetime"
+  "created_at": "datetime (thời gian tạo lesson)",
+  "updated_at": "datetime (thời gian cập nhật gần nhất)"
 }
 ```
 
@@ -2933,7 +1336,7 @@ module_id: string (bắt buộc, UUID của module)
 
 ---
 
-### 4.4 Làm bài quiz kèm theo bài học
+### 4.8 Làm bài quiz kèm theo bài học
 **Endpoint:** `POST /api/v1/quizzes/{quiz_id}/attempt`  
 **Quyền:** Student (enrolled)
 
@@ -3136,8 +1539,6 @@ module_id: string (bắt buộc, UUID của module)
 **Ghi chú:** Không có endpoint riêng để complete lesson. Việc complete lesson được trigger tự động khi pass quiz.
 
 ---
-
-## 4.X QUẢN LÝ QUIZ CHO GIẢNG VIÊN (3.3)
 
 ### 4.13 Tạo quiz tùy chỉnh cho bài học
 **Endpoint:** `POST /api/v1/lessons/{lesson_id}/quizzes`  
@@ -3523,34 +1924,6 @@ module_id: string (bắt buộc, UUID của module)
 - **Bảng ranking:** Sắp xếp học viên theo điểm từ cao xuống thấp
 - **Câu hỏi khó nhất:** Top 5 câu có tỷ lệ sai cao nhất
 - Giúp giảng viên đánh giá độ khó quiz và điều chỉnh nội dung giảng dạy
-**Controller:** `handle_get_class_quiz_results`
-
-**Mô tả:** Giảng viên xem kết quả làm bài của tất cả học viên trong lớp.
-
-**Response Schema (200 OK):**
-```json
-{
-  "quiz_id": "string (UUID)",
-  "quiz_title": "string",
-  "class_stats": {
-    "total_students": "number",
-    "attempted_students": "number",
-    "average_score": "number (0-100)",
-    "pass_rate": "number (0-100%)"
-  },
-  "student_results": [
-    {
-      "student_id": "string (UUID)",
-      "student_name": "string",
-      "score": "number (0-100)",
-      "status": "string (Pass|Fail)",
-      "attempt_count": "number",
-      "last_attempt": "datetime",
-      "time_spent": "number (seconds)"
-    }
-  ]
-}
-```
 
 ---
 
@@ -3588,11 +1961,15 @@ module_id: string (bắt buộc, UUID của module)
 
 ---
 
-## 5. PERSONAL COURSES (2.5)
+## 5. KHÓA HỌC CÁ NHÂN (2.5)
 
 ### 5.1 Tạo khóa học từ AI Prompt
 **Endpoint:** `POST /api/v1/courses/from-prompt`  
-**Quyền:** Student
+**Quyền:** Student  
+**Router:** `personal_courses_router.py`  
+**Controller:** `handle_create_course_from_prompt`
+
+**Mô tả:** Học viên chỉ cần nhập mô tả bằng ngôn ngữ tự nhiên về chủ đề và mục tiêu học tập, AI sẽ tự động tạo khóa học hoàn chỉnh. Ví dụ prompt: "Tôi muốn học lập trình Python cơ bản cho người mới bắt đầu, tập trung vào xử lý dữ liệu". AI sẽ sinh ra: (1) Danh sách modules được sắp xếp theo thứ tự logic từ cơ bản đến nâng cao, (2) Các lessons trong mỗi module với nội dung cụ thể, (3) Learning outcomes cho từng module, (4) Nội dung cơ bản cho mỗi lesson. Cơ chế: AI tạo ngay một bản draft trong database với status="draft". Học viên có thể chỉnh sửa bản draft này và publish khi hài lòng. Nếu F5 hoặc đóng trình duyệt, bản draft vẫn được lưu.
 
 **Request Schema:**
 ```json
@@ -3604,27 +1981,41 @@ module_id: string (bắt buộc, UUID của module)
 **Response Schema (201 Created):**
 ```json
 {
-  "course_id": "string (UUID)",
-  "title": "string (AI tạo)",
-  "description": "string (AI tạo)",
+  "course_id": "string (UUID khóa học được tạo)",
+  "title": "string (tiêu đề do AI sinh ra)",
+  "description": "string (mô tả do AI sinh ra)",
+  "category": "string (danh mục do AI xác định)",
+  "level": "string (Beginner|Intermediate|Advanced, do AI xác định)",
+  "status": "string (draft)",
   "modules": [
     {
-      "id": "string (UUID)",
-      "title": "string",
-      "description": "string",
-      "order": "number",
+      "id": "string (UUID module)",
+      "title": "string (tiêu đề module do AI sinh)",
+      "description": "string (mô tả module)",
+      "order": "number (thứ tự module từ 1, 2, 3...)",
+      "difficulty": "string (Basic|Intermediate|Advanced)",
+      "learning_outcomes": [
+        "string (mục tiêu học tập của module)"
+      ],
       "lessons": [
         {
-          "id": "string (UUID)",
-          "title": "string",
-          "content_outline": "string (outline nội dung)"
+          "id": "string (UUID lesson)",
+          "title": "string (tiêu đề lesson do AI sinh)",
+          "order": "number (thứ tự lesson trong module)",
+          "content_outline": "string (outline nội dung chính do AI sinh)"
         }
       ]
     }
   ],
-  "status": "string (draft)",
   "created_at": "datetime",
   "message": "string (Khóa học draft đã được tạo, bạn có thể chỉnh sửa trước khi xuất bản)"
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "detail": "string (Prompt too short - minimum 20 characters | Unable to generate course from prompt | AI service unavailable)"
 }
 ```
 
@@ -3638,29 +2029,42 @@ module_id: string (bắt buộc, UUID của module)
 
 ### 5.2 Tạo khóa học thủ công
 **Endpoint:** `POST /api/v1/courses/personal`  
-**Quyền:** Student
+**Quyền:** Student  
+**Router:** `personal_courses_router.py`  
+**Controller:** `handle_create_personal_course`
+
+**Mô tả:** Tạo khóa học từ đầu với thông tin cơ bản do học viên tự nhập và tổ chức nội dung. Bước 1: Nhập thông tin cơ bản: tên khóa học, mô tả ngắn, danh mục (Programming, Math...), cấp độ. Bước 2: Hệ thống tạo khóa học trống với trạng thái "draft". Bước 3: Trả về course_id và chuyển đến trang quản lý để học viên tự thêm modules, lessons, và nội dung. Lợi ích: Kiểm soát hoàn toàn nội dung và cấu trúc khóa học theo ý muốn. Phù hợp cho người có kinh nghiệm hoặc muốn tạo khóa học độc đáo.
 
 **Request Schema:**
 ```json
 {
-  "title": "string (bắt buộc)",
-  "description": "string (bắt buộc)",
-  "category": "string (Programming|Math|Business|Languages)",
-  "level": "string (Beginner|Intermediate|Advanced)"
+  "title": "string (bắt buộc, tối thiểu 5 ký tự, tối đa 200 ký tự)",
+  "description": "string (bắt buộc, tối thiểu 20 ký tự)",
+  "category": "string (bắt buộc: Programming|Math|Business|Languages|Other)",
+  "level": "string (bắt buộc: Beginner|Intermediate|Advanced)",
+  "thumbnail_url": "string (tùy chọn, URL ảnh đại diện)"
 }
 ```
 
 **Response Schema (201 Created):**
 ```json
 {
-  "id": "string (UUID)",
+  "id": "string (UUID khóa học)",
   "title": "string",
   "description": "string",
   "category": "string",
   "level": "string",
   "status": "string (draft)",
+  "owner_id": "string (UUID học viên tạo)",
   "created_at": "datetime",
   "message": "string (Khóa học trống được tạo, hãy thêm modules và lessons)"
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "detail": "string (Title too short | Description too short | Invalid category | Invalid level)"
 }
 ```
 
@@ -3668,13 +2072,20 @@ module_id: string (bắt buộc, UUID của module)
 
 ### 5.3 Xem danh sách khóa học cá nhân
 **Endpoint:** `GET /api/v1/courses/my-personal`  
-**Quyền:** Student
+**Quyền:** Student  
+**Router:** `personal_courses_router.py`  
+**Controller:** `handle_list_my_personal_courses`
+
+**Mô tả:** Hiển thị tất cả khóa học do chính học viên tạo (từ AI hoặc thủ công). Phạm vi hiển thị: Khóa học cá nhân chỉ hiển thị cho người tạo và Admin. Không công khai, không chia sẻ được. Thông tin hiển thị: (1) Tên khóa học và hình ảnh, (2) Trạng thái: "draft" (nháp), "published" (đã hoàn thành), "archived" (lưu trữ), (3) Thống kê: số modules/lessons đã tạo, (4) Ngày tạo. Tính năng: (a) Filter theo trạng thái (draft/published/archived), (b) Tìm kiếm theo tên, (c) Mỗi item có các action: Xem chi tiết, Chỉnh sửa, Xóa.
 
 **Query Parameters:**
 ```
-status: string (draft|published, tùy chọn)
+status: string (tùy chọn: draft|published|archived)
+search: string (tùy chọn, tìm kiếm theo tên khóa học)
 skip: number (mặc định: 0)
-limit: number (mặc định: 10)
+limit: number (mặc định: 10, tối đa: 50)
+sort_by: string (created_at|updated_at|title, mặc định: created_at)
+sort_order: string (asc|desc, mặc định: desc)
 ```
 
 **Response Schema (200 OK):**
@@ -3684,16 +2095,24 @@ limit: number (mặc định: 10)
     {
       "id": "string (UUID)",
       "title": "string",
-      "thumbnail_url": "string",
-      "status": "string",
-      "module_count": "number",
-      "lesson_count": "number",
-      "created_at": "datetime"
+      "thumbnail_url": "string (có thể null)",
+      "status": "string (draft|published|archived)",
+      "category": "string",
+      "level": "string",
+      "module_count": "number (số modules đã tạo)",
+      "lesson_count": "number (số lessons đã tạo)",
+      "created_at": "datetime",
+      "updated_at": "datetime"
     }
   ],
-  "total": "number",
+  "total": "number (tổng số khóa học)",
   "skip": "number",
-  "limit": "number"
+  "limit": "number",
+  "summary": {
+    "draft_count": "number",
+    "published_count": "number",
+    "archived_count": "number"
+  }
 }
 ```
 
@@ -3701,7 +2120,11 @@ limit: number (mặc định: 10)
 
 ### 5.4 Chỉnh sửa khóa học cá nhân
 **Endpoint:** `PUT /api/v1/courses/personal/{course_id}`  
-**Quyền:** Student (owner)
+**Quyền:** Student (owner)  
+**Router:** `personal_courses_router.py`  
+**Controller:** `handle_update_personal_course`
+
+**Mô tả:** Cho phép sửa đổi mọi thành phần của khóa học cá nhân: (1) Thay đổi tiêu đề, mô tả, hình ảnh khóa học, (2) Thêm/xóa/sắp xếp lại modules, (3) Thêm/xóa/chỉnh sửa nội dung lessons, (4) Cập nhật learning outcomes, (5) Thêm/xóa tài nguyên đính kèm. Giao diện: Cung cấp drag-and-drop để sắp xếp modules/lessons dễ dàng. Auto-save: Mọi thay đổi được tự động lưu sau 2-3 giây hoặc khi người dùng rời khỏi trường đang chỉnh sửa để tránh mất dữ liệu.
 
 **Request Schema:**
 ```json
@@ -3711,15 +2134,17 @@ limit: number (mặc định: 10)
   "thumbnail_url": "string (tùy chọn)",
   "category": "string (tùy chọn)",
   "level": "string (tùy chọn)",
+  "status": "string (tùy chọn: draft|published|archived)",
   "modules": [
     {
-      "id": "string (UUID module, nếu cập nhật)",
-      "title": "string",
-      "description": "string",
-      "order": "number",
+      "id": "string (UUID module, nếu cập nhật module cũ. Null nếu thêm mới)",
+      "title": "string (bắt buộc nếu có module)",
+      "description": "string (bắt buộc nếu có module)",
+      "order": "number (thứ tự module)",
+      "difficulty": "string (Basic|Intermediate|Advanced)",
       "lessons": [
         {
-          "id": "string (UUID lesson, nếu cập nhật)",
+          "id": "string (UUID lesson, nếu cập nhật. Null nếu thêm mới)",
           "title": "string",
           "content": "string (HTML hoặc markdown)",
           "order": "number"
@@ -3735,8 +2160,23 @@ limit: number (mặc định: 10)
 {
   "id": "string (UUID)",
   "title": "string",
+  "status": "string",
   "updated_at": "datetime",
   "message": "string (Khóa học đã được cập nhật)"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "detail": "string (Not the owner of this course | Cannot edit published course)"
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "detail": "string (Course not found)"
 }
 ```
 
@@ -3748,64 +2188,110 @@ limit: number (mặc định: 10)
 
 ### 5.5 Xóa khóa học cá nhân
 **Endpoint:** `DELETE /api/v1/courses/personal/{course_id}`  
-**Quyền:** Student (owner)
+**Quyền:** Student (owner)  
+**Router:** `personal_courses_router.py`  
+**Controller:** `handle_delete_personal_course`
+
+**Mô tả:** Xóa vĩnh viễn khóa học đã tạo. Điều kiện: Chỉ cho phép xóa khóa học do chính học viên đó tạo (owner). Cảnh báo: Hiển thị dialog xác nhận rõ ràng về việc: (1) Xóa không thể khôi phục, (2) Tất cả nội dung, modules, lessons sẽ bị xóa. Kiểm tra: Backend kiểm tra ownership (quyền sở hữu) trước khi cho phép xóa.
 
 **Response Schema (200 OK):**
 ```json
 {
-  "message": "string (Khóa học đã được xóa vĩnh viễn)"
+  "message": "string (Khóa học đã được xóa vĩnh viễn)",
+  "deleted_course_id": "string (UUID)",
+  "deleted_at": "datetime"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "detail": "string (Not the owner of this course | Cannot delete published course with enrollments)"
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "detail": "string (Course not found)"
 }
 ```
 
 ---
 
-## 6. AI CHATBOT (2.6)
+## 6. CHATBOT HỖ TRỢ AI (2.6)
 
 ### 6.1 Chat hỏi đáp về khóa học
 **Endpoint:** `POST /api/v1/chat/course/{course_id}`  
-**Quyền:** Student (enrolled)
+**Quyền:** Student (enrolled)  
+**Router:** `chat_router.py`  
+**Controller:** `handle_send_chat_message`
+
+**Mô tả:** Học viên có thể hỏi bất cứ điều gì liên quan đến nội dung khóa học đang học, AI sẽ trả lời dựa trên context (ngữ cảnh) của khóa học đó. AI có context của: (1) Tên và mô tả khóa học, (2) Nội dung tất cả modules và lessons, (3) Learning outcomes, (4) Tài nguyên đính kèm.
+
+**Path Parameters:**
+```
+course_id: string (bắt buộc, UUID của khóa học)
+```
 
 **Request Schema:**
 ```json
 {
-  "question": "string (bắt buộc, câu hỏi người dùng)",
-  "conversation_id": "string (tùy chọn, UUID nếu tiếp tục hội thoại cũ)"
+  "question": "string (bắt buộc, câu hỏi của học viên)",
+  "conversation_id": "string (tùy chọn, UUID conversation hiện tại để duy trì context)",
+  "context_type": "string (tùy chọn: lesson|module|general, mặc định: general)"
 }
 ```
 
 **Response Schema (200 OK):**
 ```json
 {
-  "conversation_id": "string (UUID)",
-  "course_id": "string (UUID)",
-  "question": "string",
-  "answer": "string (markdown formatted, có code highlight)",
-  "generated_at": "datetime",
+  "conversation_id": "string (UUID, tạo mới nếu chưa có)",
+  "message_id": "string (UUID của message này)",
+  "question": "string (câu hỏi đã gửi)",
+  "answer": "string (câu trả lời từ AI, markdown format)",
   "sources": [
     {
-      "lesson_id": "string (UUID)",
-      "lesson_title": "string",
-      "relevance_score": "number (0-100)"
+      "type": "string (lesson|module|resource)",
+      "id": "string (UUID)",
+      "title": "string (tiêu đề nguồn)",
+      "excerpt": "string (đoạn trích liên quan)"
     }
-  ]
+  ],
+  "related_lessons": [
+    {
+      "lesson_id": "string (UUID)",
+      "title": "string",
+      "url": "string (link đến lesson)"
+    }
+  ],
+  "timestamp": "datetime",
+  "tokens_used": "number (số tokens AI đã dùng)"
 }
 ```
 
-**Ghi chú:**
-- AI có **context khóa học:** tên, mô tả, nội dung modules, lessons
-- Trả lời **real-time** stream
-- Support markdown, code highlighting
+**Error Response (403 Forbidden):**
+```json
+{
+  "detail": "string (Not enrolled in this course)"
+}
+```
 
 ---
 
 ### 6.2 Xem lịch sử hội thoại
 **Endpoint:** `GET /api/v1/chat/history`  
-**Quyền:** Student
+**Quyền:** Student  
+**Router:** `chat_router.py`  
+**Controller:** `handle_get_chat_history`
+
+**Mô tả:** Hiển thị danh sách tất cả các cuộc hội thoại (conversations) đã có với AI. Nhóm theo: (1) Ngày (hôm nay, hôm qua, tuần này...), (2) Chủ đề/khóa học đã chat. Học viên có thể click vào để xem lại toàn bộ nội dung conversation và tiếp tục hỏi đáp từ đó (giữ nguyên context).
 
 **Query Parameters:**
 ```
-skip: number (mặc định: 0)
-limit: number (mặc định: 20)
+course_id: string (tùy chọn, UUID - lọc theo khóa học)
+skip: number (pagination, mặc định: 0)
+limit: number (pagination, mặc định: 20, tối đa: 50)
 ```
 
 **Response Schema (200 OK):**
@@ -3813,14 +2299,22 @@ limit: number (mặc định: 20)
 {
   "conversations": [
     {
-      "id": "string (UUID)",
+      "conversation_id": "string (UUID)",
       "course_id": "string (UUID)",
       "course_title": "string",
-      "summary": "string (AI tóm tắt chủ đề)",
-      "last_message_at": "datetime",
-      "message_count": "number"
+      "topic_summary": "string (chủ đề chính được AI tóm tắt)",
+      "message_count": "number (số messages trong conversation)",
+      "last_message_preview": "string (preview message cuối, 100 ký tự)",
+      "created_at": "datetime (thời gian bắt đầu)",
+      "last_updated": "datetime (message cuối cùng)"
     }
   ],
+  "grouped_by_date": {
+    "today": ["array of conversation_ids"],
+    "yesterday": ["array of conversation_ids"],
+    "this_week": ["array of conversation_ids"],
+    "older": ["array of conversation_ids"]
+  },
   "total": "number",
   "skip": "number",
   "limit": "number"
@@ -3831,83 +2325,164 @@ limit: number (mặc định: 20)
 
 ### 6.3 Xem chi tiết conversation
 **Endpoint:** `GET /api/v1/chat/conversations/{conversation_id}`  
-**Quyền:** Student (owner)
+**Quyền:** Student (owner)  
+**Router:** `chat_router.py`  
+**Controller:** `handle_get_conversation_detail`
+
+**Mô tả:** Xem toàn bộ nội dung của một cuộc hội thoại cụ thể với AI. Hiển thị: (1) Tất cả messages trong conversation theo thứ tự thời gian, (2) Thông tin khóa học liên quan (nếu có), (3) Thời gian bắt đầu cuộc hội thoại. Cần thiết: Khi user click vào một conversation trong lịch sử để xem lại hoặc tiếp tục hỏi đáp.
+
+**Path Parameters:**
+```
+conversation_id: string (bắt buộc, UUID)
+```
 
 **Response Schema (200 OK):**
 ```json
 {
-  "id": "string (UUID conversation)",
-  "course_id": "string (UUID)",
-  "course_title": "string",
-  "summary": "string (AI tóm tắt chủ đề)",
+  "conversation_id": "string (UUID)",
+  "course": {
+    "course_id": "string (UUID)",
+    "title": "string",
+    "thumbnail_url": "string (có thể null)"
+  },
+  "created_at": "datetime (thời gian bắt đầu conversation)",
+  "last_updated": "datetime",
+  "message_count": "number",
   "messages": [
     {
-      "id": "string (UUID message)",
+      "message_id": "string (UUID)",
       "role": "string (user|assistant)",
-      "content": "string (nội dung tin nhắn)",
-      "created_at": "datetime"
+      "content": "string (nội dung message, markdown format)",
+      "timestamp": "datetime",
+      "sources": [
+        {
+          "type": "string (lesson|module|resource)",
+          "title": "string",
+          "url": "string"
+        }
+      ]
     }
-  ],
-  "total_messages": "number",
-  "created_at": "datetime (thời gian bắt đầu cuộc hội thoại)",
-  "last_updated": "datetime"
+  ]
 }
 ```
 
-**Ghi chú:**
-- Khi user click vào conversation trong lịch sử để xem lại hoặc tiếp tục
-- Frontend cần toàn bộ context (messages trước đó) để duy trì ngữ cảnh
+**Error Response (403 Forbidden):**
+```json
+{
+  "detail": "string (Not the owner of this conversation)"
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "detail": "string (Conversation not found)"
+}
+```
 
 ---
 
 ### 6.4 Xóa tất cả lịch sử chat
 **Endpoint:** `DELETE /api/v1/chat/conversations`  
-**Quyền:** Student
+**Quyền:** Student  
+**Router:** `chat_router.py`  
+**Controller:** `handle_delete_all_conversations`
+
+**Mô tả:** Xóa toàn bộ lịch sử hội thoại với AI một lần. Cảnh báo: Dữ liệu đã xóa không thể khôi phục được. Response: Trả về số lượng conversations đã bị xóa.
+
+**Request Schema:** (empty body)
 
 **Response Schema (200 OK):**
 ```json
 {
-  "message": "string (Đã xóa tất cả lịch sử hội thoại)",
-  "deleted_count": "number (số lượng conversations đã xóa)",
-  "note": "string (Dữ liệu đã xóa không thể khôi phục)"
+  "deleted_count": "number (số conversations đã xóa)",
+  "message": "string (Đã xóa tất cả lịch sử chat)",
+  "deleted_at": "datetime"
 }
 ```
 
 **Ghi chú:**
-- Xóa hàng loạt tất cả conversations của user
 - Frontend hiển thị modal xác nhận trước khi gọi API
-- Không yêu cầu password trong request body
+- Dữ liệu đã xóa không thể khôi phục
 
 ---
 
 ### 6.5 Xóa lịch sử chat từng conversation
 **Endpoint:** `DELETE /api/v1/chat/history/{conversation_id}`  
-**Quyền:** Student
+**Quyền:** Student (owner)  
+**Router:** `chat_router.py`  
+**Controller:** `handle_delete_conversation`
+
+**Mô tả:** Cho phép xóa lịch sử hội thoại để giữ gọn gàng hoặc bảo mật thông tin. Xóa từng conversation: Click icon xóa trên mỗi conversation riêng lẻ. Cảnh báo: Dữ liệu đã xóa không thể khôi phục được.
+
+**Path Parameters:**
+```
+conversation_id: string (bắt buộc, UUID)
+```
 
 **Response Schema (200 OK):**
 ```json
 {
-  "message": "string (Lịch sử hội thoại đã được xóa)"
+  "conversation_id": "string (UUID đã xóa)",
+  "message": "string (Conversation đã được xóa)",
+  "deleted_at": "datetime"
 }
 ```
 
+**Error Response (403 Forbidden):**
+```json
+{
+  "detail": "string (Not the owner of this conversation)"
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "detail": "string (Conversation not found)"
+}
+```
+
+**Ghi chú:**
+- Có thể xóa hàng loạt bằng cách gọi API nhiều lần với các conversation_id khác nhau
+- Frontend hiển thị checkbox để chọn nhiều conversations và xóa cùng lúc
+
 ---
 
-## 7. STUDENT DASHBOARD & ANALYTICS (2.7)
+## 7. DASHBOARD & PHÂN TÍCH HỌC VIÊN (2.7)
 
 ### 7.1 Dashboard tổng quan học viên
 **Endpoint:** `GET /api/v1/dashboard/student`  
-**Quyền:** Student
+**Quyền:** Student  
+**Router:** `dashboard_router.py`  
+**Controller:** `handle_get_student_dashboard`
+
+**Mô tả:** Trang chủ (home) hiển thị thông tin quan trọng nhất để học viên nắm bắt nhanh tình hình học tập. Các widget hiển thị: (1) Khóa học đang học: danh sách 3-5 khóa đang học gần đây nhất với progress bar (%) cho mỗi khóa, (2) Quiz cần làm: các bài quiz đến hạn hoặc chưa hoàn thành, (3) Số lessons đã hoàn thành và tổng số lessons, (4) Điểm trung bình quiz (trên thang 100). Giao diện: Layout responsive với các widget có thể tùy chỉnh vị trí (drag-and-drop) theo sở thích.
 
 **Response Schema (200 OK):**
 ```json
 {
-  "in_progress_courses": [
+  "user_id": "string (UUID)",
+  "full_name": "string",
+  "overview": {
+    "total_courses_enrolled": "number",
+    "active_courses": "number (đang học)",
+    "completed_courses": "number",
+    "total_lessons_completed": "number",
+    "total_study_hours": "number",
+    "current_streak_days": "number (số ngày học liên tiếp)"
+  },
+  "recent_courses": [
     {
       "course_id": "string (UUID)",
       "title": "string",
-      "progress": "number (%)",
-      "last_accessed": "datetime"
+      "thumbnail_url": "string (có thể null)",
+      "progress_percent": "number (0-100)",
+      "last_accessed": "datetime",
+      "next_lesson": {
+        "lesson_id": "string (UUID)",
+        "title": "string"
+      }
     }
   ],
   "pending_quizzes": [
@@ -3915,35 +2490,56 @@ limit: number (mặc định: 20)
       "quiz_id": "string (UUID)",
       "title": "string",
       "course_title": "string",
-      "due_at": "datetime (có thể null)"
+      "lesson_title": "string",
+      "due_date": "datetime (có thể null)",
+      "status": "string (not_started|failed - cần làm lại)"
+    }
+  ],
+  "performance_summary": {
+    "average_quiz_score": "number (0-100, điểm trung bình tất cả quiz)",
+    "quiz_pass_rate": "number (0-100, tỷ lệ pass %)",
+    "lessons_this_week": "number (số lessons hoàn thành tuần này)"
+  },
+  "recommendations": [
+    {
+      "course_id": "string (UUID)",
+      "title": "string",
+      "reason": "string (lý do gợi ý ngắn gọn)"
     }
   ]
 }
 ```
 
----
-
-### 7.2 Thống kê học tập chi tiết
+### 7.2 Thống kê học tập cá nhân
 **Endpoint:** `GET /api/v1/analytics/learning-stats`  
-**Quyền:** Student
+**Quyền:** Student  
+**Router:** `analytics_router.py`  
+**Controller:** `handle_get_learning_stats`
+
+**Mô tả:** Thống kê tổng quan hoạt động học tập của học viên. Hệ thống chỉ đếm quiz attempts từ các courses đang active (không tính quiz từ courses bị cancelled) để đảm bảo thống kê chính xác.
 
 **Response Schema (200 OK):**
 ```json
 {
-  "lessons_completed": "number",
-  "quizzes_passed": "number",
-  "quizzes_failed": "number",
-  "avg_quiz_score": "number (0-100)",
-  "completed_courses": "number",
-  "in_progress_courses": "number",
-  "cancelled_courses": "number",
-  "by_course": [
+  "user_id": "string (UUID)",
+  "summary": {
+    "total_courses_enrolled": "number",
+    "completed_courses": "number",
+    "total_study_hours": "number",
+    "current_streak_days": "number",
+    "longest_streak_days": "number"
+  },
+  "this_week": {
+    "study_hours": "number",
+    "lessons_completed": "number",
+    "quiz_attempts": "number",
+    "average_score": "number (0-100)"
+  },
+  "skill_progress": [
     {
-      "course_id": "string (UUID)",
-      "course_title": "string",
-      "lessons_completed": "number",
-      "quiz_score": "number",
-      "status": "string"
+      "skill_tag": "string",
+      "level": "string (Beginner|Intermediate|Advanced)",
+      "progress": "number (0-100%)"
     }
   ]
 }
@@ -3951,113 +2547,152 @@ limit: number (mặc định: 20)
 
 ---
 
-### 7.3 Biểu đồ tiến độ theo thời gian
+### 7.3 Biểu đồ tiến độ học tập
 **Endpoint:** `GET /api/v1/analytics/progress-chart`  
-**Quyền:** Student
+**Quyền:** Student  
+**Router:** `analytics_router.py`  
+**Controller:** `handle_get_progress_chart`
+
+**Mô tả:** Dữ liệu vẽ biểu đồ tiến độ học tập theo thời gian. Hệ thống parse `lessons_progress` array trong Progress document để đếm lessons completed theo `completion_date` (incremental data, không dùng cumulative count). Đảm bảo chart hiển thị chính xác số lessons hoàn thành trong từng time period.
+
+**FIXED (Dec 07, 2025):** Progress document sử dụng validated LessonProgressItem schema với các fields: lesson_id (UUID), lesson_title (string), status (enum: not-started|in-progress|completed), completion_date (datetime nullable), time_spent_minutes (number), video_progress_seconds (number nullable).
 
 **Query Parameters:**
 ```
-time_range: string (7d|30d|90d, mặc định: 30d)
-course_id: string (tùy chọn, lọc khóa học)
+period: string (7days|30days|90days|1year, mặc định: 30days)
+type: string (hours|lessons|quizzes, mặc định: hours)
 ```
 
 **Response Schema (200 OK):**
 ```json
 {
-  "chart_data": [
+  "period": "string",
+  "type": "string", 
+  "data_points": [
     {
-      "date": "string (YYYY-MM-DD)",
-      "lessons_completed": "number",
-      "hours_spent": "number"
+      "date": "date (YYYY-MM-DD)",
+      "value": "number",
+      "label": "string (optional description)"
     }
   ],
   "summary": {
-    "total_lessons": "number",
-    "total_hours": "number",
-    "avg_per_day": "number"
+    "total_in_period": "number",
+    "average_per_day": "number",
+    "best_day": {
+      "date": "date",
+      "value": "number"
+    }
   }
 }
 ```
 
 ---
 
-### 7.4 Đề xuất khóa học thông minh bằng AI
+### 7.4 Gợi ý khóa học
 **Endpoint:** `GET /api/v1/recommendations`  
-**Quyền:** Student
+**Quyền:** Student  
+**Router:** `recommendation_router.py`  
+**Controller:** `handle_get_recommendations`
+
+**Mô tả:** AI gợi ý khóa học phù hợp dựa trên lịch sử học tập và skill gaps.
 
 **Response Schema (200 OK):**
 ```json
 {
-  "recommended_courses": [
+  "user_id": "string (UUID)",
+  "recommendations": [
     {
       "course_id": "string (UUID)",
       "title": "string",
-      "reason": "string (lý do AI gợi ý)",
-      "relevance_score": "number (0-100)"
+      "description": "string",
+      "level": "string (Beginner|Intermediate|Advanced)",
+      "estimated_hours": "number",
+      "match_percentage": "number (0-100%)",
+      "reason": "string (lý do gợi ý)",
+      "skill_tags": ["string array"],
+      "rating": "number (0-5.0)"
     }
-  ]
+  ],
+  "based_on": {
+    "completed_courses": "number",
+    "skill_gaps": ["string array"],
+    "learning_preferences": ["string array"]
+  }
 }
 ```
 
 ---
 
-## 8. INSTRUCTOR MANAGEMENT (3.x)
+## 8. QUẢN LÝ GIẢNG VIÊN (3.x)
 
 ### 8.1 Tạo lớp học mới
 **Endpoint:** `POST /api/v1/classes`  
-**Quyền:** Instructor
+**Quyền:** Instructor  
+**Router:** `classes_router.py`  
+**Controller:** `handle_create_class`
+
+**Mô tả:** Giảng viên tạo lớp học mới với thông tin cơ bản và mã mời tự động.
 
 **Request Schema:**
 ```json
 {
-  "name": "string (bắt buộc)",
-  "description": "string (bắt buộc)",
-  "course_id": "string (bắt buộc, UUID khóa học công khai)",
-  "start_date": "datetime (bắt buộc)",
-  "end_date": "datetime (bắt buộc)",
-  "max_students": "number (bắt buộc)"
+  "name": "string (bắt buộc, tên lớp học)",
+  "description": "string (tùy chọn, mô tả lớp học)",
+  "course_id": "string (UUID khóa học liên kết)",
+  "max_students": "number (tối đa học viên, mặc định: 50)",
+  "start_date": "datetime (ngày bắt đầu)",
+  "end_date": "datetime (ngày kết thúc, tùy chọn)"
 }
 ```
 
 **Response Schema (201 Created):**
 ```json
 {
-  "class_id": "string (UUID lớp học)",
+  "class_id": "string (UUID)",
   "name": "string",
-  "course_id": "string (UUID)",
-  "invite_code": "string (6-8 ký tự - tự động tạo để học viên join)",
-  "status": "string (preparing)",
+  "invite_code": "string (6-8 ký tự, auto-generated)",
+  "course_title": "string",
+  "student_count": 0,
   "created_at": "datetime",
-  "message": "string (Lớp học đã được tạo thành công)"
+  "message": "Lớp học đã được tạo thành công"
 }
 ```
 
-**Ghi chú:**
-- Mã mời (invite_code) được tự động tạo khi tạo lớp học
-- Không cần endpoint riêng để tạo mã mời
-
 ---
 
-### 8.2 Xem danh sách lớp học
+### 8.2 Lấy danh sách lớp học của giảng viên
 **Endpoint:** `GET /api/v1/classes/my-classes`  
-**Quyền:** Instructor
+**Quyền:** Instructor  
+**Router:** `classes_router.py`  
+**Controller:** `handle_list_my_classes`
+
+**Mô tả:** Hiển thị tất cả lớp học do giảng viên tạo và quản lý.
+
+**Query Parameters:**
+```
+status: string (active|completed|draft, tùy chọn)
+skip: number (pagination)
+limit: number (pagination)
+```
 
 **Response Schema (200 OK):**
 ```json
 {
-  "classes": [
+  "data": [
     {
-      "id": "string (UUID)",
+      "class_id": "string (UUID)",
       "name": "string",
-      "course_title": "string",
-      "student_count": "number (hiện tại/tối đa, ví dụ: 25/30)",
-      "status": "string (preparing|active|completed)",
+      "course_title": "string", 
+      "student_count": "number",
+      "invite_code": "string",
+      "status": "string (active|completed)",
       "start_date": "datetime",
-      "end_date": "datetime",
-      "progress": "number (%)"
+      "created_at": "datetime"
     }
   ],
-  "total": "number"
+  "total": "number",
+  "skip": "number",
+  "limit": "number"
 }
 ```
 
@@ -4065,50 +2700,100 @@ course_id: string (tùy chọn, lọc khóa học)
 
 ### 8.3 Xem chi tiết lớp học
 **Endpoint:** `GET /api/v1/classes/{class_id}`  
-**Quyền:** Instructor (owner)
+**Quyền:** Instructor (class owner)  
+**Router:** `classes_router.py`  
+**Controller:** `handle_get_class_detail`
+
+**Mô tả:** Thông tin chi tiết lớp học bao gồm danh sách học viên và tiến độ.
 
 **Response Schema (200 OK):**
 ```json
 {
-  "id": "string (UUID)",
+  "class_id": "string (UUID)",
   "name": "string",
-  "course_id": "string (UUID)",
-  "course_title": "string",
-  "invite_code": "string",
   "description": "string",
-  "status": "string",
+  "course": {
+    "id": "string (UUID)",
+    "title": "string",
+    "module_count": "number"
+  },
+  "invite_code": "string",
+  "max_students": "number",
+  "student_count": "number",
   "start_date": "datetime",
   "end_date": "datetime",
-  "max_students": "number",
-  "students": [
+  "status": "string (active|completed)",
+  "recent_students": [
     {
-      "id": "string (UUID)",
-      "name": "string",
-      "email": "string",
-      "avatar_url": "string",
-      "progress": "number (%)",
-      "joined_at": "datetime"
+      "student_id": "string (UUID)",
+      "student_name": "string",
+      "join_date": "datetime",
+      "progress": "number (0-100%)"
     }
   ],
-  "stats": {
-    "total_students": "number",
-    "lessons_completed": "number",
-    "avg_quiz_score": "number"
+  "class_stats": {
+    "average_progress": "number (0-100%)",
+    "completed_students": "number",
+    "active_students": "number"
   }
 }
 ```
 
 ---
 
-### 8.4-8.5 Chỉnh sửa, Xóa lớp học
-**Endpoints:** `PUT /api/v1/classes/{class_id}` | `DELETE /api/v1/classes/{class_id}`  
-**Quyền:** Instructor (owner)
+### 8.4 Cập nhật thông tin lớp học
+**Endpoint:** `PUT /api/v1/classes/{class_id}`  
+**Quyền:** Instructor (class owner)  
+**Router:** `classes_router.py`  
+**Controller:** `handle_update_class`
+
+**Mô tả:** Chỉnh sửa tên, mô tả, số lượng học viên tối đa của lớp học.
+
+**Request Schema:**
+```json
+{
+  "name": "string (tùy chọn)",
+  "description": "string (tùy chọn)",
+  "max_students": "number (tùy chọn)",
+  "end_date": "datetime (tùy chọn)"
+}
+```
+
+**Response Schema (200 OK):**
+```json
+{
+  "class_id": "string (UUID)",
+  "message": "Thông tin lớp học đã được cập nhật",
+  "updated_at": "datetime"
+}
+```
 
 ---
 
-### 8.6 Student tham gia lớp bằng mã mời
+### 8.5 Xóa lớp học
+**Endpoint:** `DELETE /api/v1/classes/{class_id}`  
+**Quyền:** Instructor (class owner)  
+**Router:** `classes_router.py`  
+**Controller:** `handle_delete_class`
+
+**Mô tả:** Xóa lớp học vĩnh viễn (chỉ khi không có học viên hoặc tất cả học viên đã rời khỏi).
+
+**Response Schema (200 OK):**
+```json
+{
+  "message": "Lớp học đã được xóa thành công"
+}
+```
+
+---
+
+### 8.6 Student tham gia lớp với mã mời
 **Endpoint:** `POST /api/v1/classes/join`  
-**Quyền:** Student
+**Quyền:** Student  
+**Router:** `classes_router.py`  
+**Controller:** `handle_join_class_with_code`
+
+**Mô tả:** Học viên nhập mã mời để tham gia lớp học.
 
 **Request Schema:**
 ```json
@@ -4120,61 +2805,97 @@ course_id: string (tùy chọn, lọc khóa học)
 **Response Schema (200 OK):**
 ```json
 {
-  "message": "string (Tham gia lớp học thành công)",
-  "class_id": "string (UUID lớp học)",
+  "class_id": "string (UUID)",
   "class_name": "string",
-  "course_title": "string (tên khóa học của lớp)",
-  "course_id": "string (UUID khóa học)",
-  "instructor_name": "string",
-  "enrollment_id": "string (UUID enrollment được tạo)",
-  "student_count": "number (tổng số học viên hiện tại)",
-  "max_students": "number (số lượng tối đa)"
+  "course_title": "string",
+  "instructor_name": "string", 
+  "join_date": "datetime",
+  "message": "Bạn đã tham gia lớp học thành công"
 }
 ```
 
-**Ghi chú:**
-- Student nhập mã mời do giảng viên cung cấp
-- Validation: mã mời hợp lệ, lớp chưa đầy, lớp đang active
-- Tự động tạo enrollment cho student vào lớp đó
-- Mã mời được tạo tự động khi instructor tạo lớp học, không cần endpoint riêng để tạo mã mời
-
 ---
 
-### 8.7-8.11 Quản lý học viên (xem danh sách, xem chi tiết, xóa học viên, xem tiến độ)
-**Endpoints:** 
-- `GET /api/v1/classes/{class_id}/students`
-- `GET /api/v1/classes/{class_id}/students/{student_id}`
-- `DELETE /api/v1/classes/{class_id}/students/{student_id}`
-- `GET /api/v1/classes/{class_id}/progress`
+### 8.7 Lấy danh sách học viên trong lớp
+**Endpoint:** `GET /api/v1/classes/{class_id}/students`  
+**Quyền:** Instructor (class owner)  
+**Router:** `classes_router.py`  
+**Controller:** `handle_get_class_students`
 
----
+**Mô tả:** Hiển thị tất cả học viên trong lớp với tiến độ học tập chi tiết.
 
-### 8.12-8.16 Quản lý Quiz
-**Endpoints:**
-- `POST /api/v1/quizzes` (tạo quiz)
-- `GET /api/v1/quizzes/my-quizzes` (danh sách)
-- `PUT /api/v1/quizzes/{id}` (chỉnh sửa)
-- `DELETE /api/v1/quizzes/{id}` (xóa)
-- `GET /api/v1/quizzes/{id}/class-results` (phân tích kết quả)
-
----
-
-### 8.17 Dashboard Instructor
-**Endpoint:** `GET /api/v1/dashboard/instructor`  
-**Quyền:** Instructor
+**Query Parameters:**
+```
+sort_by: string (name|join_date|progress, mặc định: join_date)
+order: string (asc|desc, mặc định: desc)  
+skip: number (pagination)
+limit: number (pagination)
+```
 
 **Response Schema (200 OK):**
 ```json
 {
-  "total_classes": "number",
-  "total_students": "number",
-  "total_quizzes": "number",
-  "avg_class_completion": "number (%)",
-  "recent_classes": [
+  "class_id": "string (UUID)",
+  "class_name": "string",
+  "data": [
     {
-      "class_id": "string (UUID)",
-      "name": "string",
-      "student_count": "number"
+      "student_id": "string (UUID)",
+      "student_name": "string",
+      "email": "string",
+      "join_date": "datetime",
+      "progress": "number (0-100%)",
+      "completed_modules": "number",
+      "total_modules": "number",
+      "last_activity": "datetime",
+      "quiz_average": "number (0-100)"
+    }
+  ],
+  "total": "number",
+  "skip": "number", 
+  "limit": "number"
+}
+```
+
+---
+
+### 8.8 Xem chi tiết học viên trong lớp
+**Endpoint:** `GET /api/v1/classes/{class_id}/students/{student_id}`  
+**Quyền:** Instructor (class owner)  
+**Router:** `classes_router.py`  
+**Controller:** `handle_get_student_detail`
+
+**Mô tả:** Thông tin chi tiết tiến độ học tập của một học viên cụ thể.
+
+**Response Schema (200 OK):**
+```json
+{
+  "student": {
+    "student_id": "string (UUID)",
+    "student_name": "string",
+    "email": "string",
+    "join_date": "datetime"
+  },
+  "progress": {
+    "overall_progress": "number (0-100%)",
+    "completed_modules": "number",
+    "total_modules": "number",
+    "study_streak_days": "number",
+    "total_study_time": "number (hours)"
+  },
+  "module_details": [
+    {
+      "module_id": "string (UUID)",
+      "module_title": "string", 
+      "progress": "number (0-100%)",
+      "completed_lessons": "number",
+      "quiz_scores": [
+        {
+          "quiz_id": "string (UUID)",
+          "quiz_title": "string",
+          "score": "number (0-100)",
+          "attempt_date": "datetime"
+        }
+      ]
     }
   ]
 }
@@ -4182,26 +2903,191 @@ course_id: string (tùy chọn, lọc khóa học)
 
 ---
 
-## 9. ADMIN MANAGEMENT (4.x)
+### 8.9 Loại học viên khỏi lớp
+**Endpoint:** `DELETE /api/v1/classes/{class_id}/students/{student_id}`  
+**Quyền:** Instructor (class owner)  
+**Router:** `classes_router.py`  
+**Controller:** `handle_remove_student`
+
+**Mô tả:** Giảng viên loại học viên khỏi lớp học (học viên mất quyền truy cập).
+
+**Response Schema (200 OK):**
+```json
+{
+  "message": "Học viên đã được loại khỏi lớp học",
+  "student_name": "string",
+  "removed_at": "datetime"
+}
+```
+
+---
+
+### 8.10 Xem tiến độ toàn lớp
+**Endpoint:** `GET /api/v1/classes/{class_id}/progress`  
+**Quyền:** Instructor (class owner)  
+**Router:** `classes_router.py`  
+**Controller:** `handle_get_class_progress`
+
+**Mô tả:** Tổng quan tiến độ học tập của cả lớp theo module và lesson.
+
+**Response Schema (200 OK):**
+```json
+{
+  "class_id": "string (UUID)",
+  "class_name": "string",
+  "overall_stats": {
+    "total_students": "number",
+    "average_progress": "number (0-100%)",
+    "completion_rate": "number (0-100%)",
+    "average_quiz_score": "number (0-100)"
+  },
+  "module_progress": [
+    {
+      "module_id": "string (UUID)",
+      "module_title": "string",
+      "students_completed": "number",
+      "completion_percentage": "number (0-100%)",
+      "average_score": "number (0-100)"
+    }
+  ]
+}
+```
+
+---
+
+### 8.11 Thống kê lớp học của giảng viên
+**Endpoint:** `GET /api/v1/analytics/instructor/classes`  
+**Quyền:** Instructor  
+**Router:** `analytics_router.py`  
+**Controller:** `handle_get_instructor_class_stats`
+
+**Mô tả:** Tổng quan các lớp học và hiệu suất giảng dạy. Hệ thống filter progress chỉ của students trong class cụ thể (dựa trên enrollment user_ids), đảm bảo avg_progress được tính chính xác cho từng lớp.
+
+**Response Schema (200 OK):**
+```json
+{
+  "instructor_id": "string (UUID)",
+  "summary": {
+    "total_classes": "number",
+    "active_classes": "number", 
+    "total_students": "number",
+    "average_completion_rate": "number (0-100%)"
+  },
+  "class_performance": [
+    {
+      "class_id": "string (UUID)",
+      "class_name": "string",
+      "student_count": "number",
+      "average_progress": "number (0-100%)",
+      "completion_rate": "number (0-100%)",
+      "average_quiz_score": "number (0-100)"
+    }
+  ]
+}
+```
+
+---
+
+### 8.12 Biểu đồ tiến độ lớp học
+**Endpoint:** `GET /api/v1/analytics/instructor/progress-chart`  
+**Quyền:** Instructor  
+**Router:** `analytics_router.py`  
+**Controller:** `handle_get_instructor_progress_chart`
+
+**Mô tả:** Biểu đồ tiến độ học tập của tất cả lớp học theo thời gian. Hệ thống chỉ đếm progress của students trong classes (filter qua enrollments), parse `lessons_progress` theo `completion_date` (incremental, không cumulative) để hiển thị chính xác số lessons hoàn thành theo từng time period.
+
+**Query Parameters:**
+```
+class_id: string (UUID, tùy chọn - lọc theo lớp cụ thể)
+period: string (7days|30days|90days, mặc định: 30days)
+```
+
+**Response Schema (200 OK):**
+```json
+{
+  "period": "string",
+  "class_data": [
+    {
+      "class_id": "string (UUID)",
+      "class_name": "string",
+      "daily_progress": [
+        {
+          "date": "date (YYYY-MM-DD)",
+          "completed_lessons": "number",
+          "quiz_attempts": "number",
+          "average_score": "number"
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+### 8.13 Phân tích hiệu suất quiz
+**Endpoint:** `GET /api/v1/analytics/instructor/quiz-performance`  
+**Quyền:** Instructor  
+**Router:** `analytics_router.py`  
+**Controller:** `handle_get_instructor_quiz_performance`
+
+**Mô tả:** Phân tích chi tiết hiệu suất các quiz do giảng viên tạo.
+
+**Query Parameters:**
+```
+class_id: string (UUID, tùy chọn)
+quiz_id: string (UUID, tùy chọn)
+```
+
+**Response Schema (200 OK):**
+```json
+{
+  "quiz_analytics": [
+    {
+      "quiz_id": "string (UUID)",
+      "quiz_title": "string",
+      "class_name": "string",
+      "statistics": {
+        "total_attempts": "number",
+        "pass_rate": "number (0-100%)",
+        "average_score": "number (0-100)",
+        "average_time": "number (seconds)"
+      },
+      "question_analysis": [
+        {
+          "question_id": "string",
+          "question_text": "string",
+          "correct_rate": "number (0-100%)",
+          "common_wrong_answers": ["string array"]
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+## 9. QUẢN LÝ HỆ THỐNG ADMIN (4.x)
 
 ### 9.1 Xem danh sách người dùng
 **Endpoint:** `GET /api/v1/admin/users`  
 **Quyền:** Admin  
 **Router:** `admin_router.py`  
-**Controller:** `admin_service.get_users_list`
+**Controller:** `handle_list_users_admin`
 
-**Mô tả:** Hiển thị tất cả người dùng trong hệ thống dạng bảng với filter, search, sort. Có autocomplete gợi ý tự động khi search theo tên hoặc email.
+**Mô tả:** Admin xem tất cả người dùng trong hệ thống với bộ lọc và tìm kiếm.
 
 **Query Parameters:**
-- `role` (string): Tùy chọn - lọc theo vai trò (student|instructor|admin)
-- `status` (string): Tùy chọn - lọc theo trạng thái (active|inactive)
-- `keyword` (string): Tùy chọn - tìm kiếm theo tên hoặc email
-- `sort_by` (string): Tùy chọn - sắp xếp (full_name|email|created_at|role), default: created_at
-- `sort_order` (string): Tùy chọn - thứ tự (asc|desc), default: desc
-- `created_from` (string): Tùy chọn - lọc từ ngày tạo (ISO 8601 date)
-- `created_to` (string): Tùy chọn - lọc đến ngày tạo (ISO 8601 date)
-- `skip` (integer): Pagination offset, default: 0
-- `limit` (integer): Pagination limit, default: 20, max: 100
+```
+role: string (student|instructor|admin, tùy chọn)
+status: string (active|inactive|banned, tùy chọn)
+search: string (tìm kiếm theo tên, email, tùy chọn)
+sort_by: string (created_at|last_login_at|name, mặc định: created_at)
+order: string (asc|desc, mặc định: desc)
+skip: number (pagination)
+limit: number (pagination)
+```
 
 **Response Schema (200 OK):**
 ```json
@@ -4209,147 +3095,94 @@ course_id: string (tùy chọn, lọc khóa học)
   "data": [
     {
       "user_id": "string (UUID)",
-      "full_name": "string (tên đầy đủ)",
-      "email": "string (email)",
-      "avatar": "string (URL avatar hoặc null)",
+      "full_name": "string",
+      "email": "string",
       "role": "string (student|instructor|admin)",
-      "status": "string (active|inactive)",
-      "created_at": "string (ISO 8601 datetime)",
-      "last_login": "string (ISO 8601 datetime hoặc null)",
-      "enrollment_count": "integer (số khóa đã đăng ký - nếu student)",
-      "class_count": "integer (số lớp đang dạy - nếu instructor)"
+      "status": "string (active|inactive|banned)",
+      "created_at": "datetime",
+      "last_login_at": "datetime",
+      "courses_enrolled": "number (chỉ student)",
+      "classes_created": "number (chỉ instructor)"
     }
   ],
-  "total": "integer (tổng số người dùng)",
-  "skip": "integer (offset hiện tại)",
-  "limit": "integer (giới hạn mỗi trang)",
-  "has_next": "boolean (còn trang tiếp theo không)"
+  "total": "number",
+  "skip": "number",
+  "limit": "number",
+  "summary": {
+    "total_users": "number",
+    "active_users": "number",
+    "new_users_this_month": "number"
+  }
 }
 ```
 
-**Ghi chú:**
-- Filter theo role, status, ngày tạo
-- Search với autocomplete (gợi ý tự động)
-- Sort theo các cột: tên, email, ngày tạo, vai trò
-
 ---
 
-### 9.2 Xem hồ sơ người dùng chi tiết
+### 9.2 Xem chi tiết người dùng
 **Endpoint:** `GET /api/v1/admin/users/{user_id}`  
 **Quyền:** Admin  
 **Router:** `admin_router.py`  
-**Controller:** `admin_service.get_user_detail`
+**Controller:** `handle_get_user_detail_admin`
 
-**Mô tả:** Xem thông tin đầy đủ của một người dùng cụ thể: thông tin cá nhân, thống kê số khóa học đã học (Student), số lớp đang dạy (Instructor), điểm trung bình, khóa học/lớp đang tham gia. Admin có cái nhìn tổng quan để quản lý và hỗ trợ người dùng.
-
-**Path Parameters:**
-- `user_id` (UUID): ID của người dùng cần xem
+**Mô tả:** Admin xem thông tin chi tiết của một người dùng cụ thể.
 
 **Response Schema (200 OK):**
 ```json
 {
   "user_id": "string (UUID)",
-  "full_name": "string (tên đầy đủ)",
-  "email": "string (email)",
-  "avatar": "string (URL avatar hoặc null)",
-  "bio": "string (tiểu sử hoặc null)",
+  "full_name": "string",
+  "email": "string",
   "role": "string (student|instructor|admin)",
-  "status": "string (active|inactive)",
-  "created_at": "string (ISO 8601 datetime)",
-  "updated_at": "string (ISO 8601 datetime)",
-  "last_login": "string (ISO 8601 datetime hoặc null)",
-  "statistics": {
-    "enrolled_courses": "integer (số khóa đã đăng ký - student)",
-    "completed_courses": "integer (số khóa đã hoàn thành - student)",
-    "average_score": "float (điểm trung bình quiz - student, 0-100)",
-    "classes_teaching": "integer (số lớp đang dạy - instructor)",
-    "students_taught": "integer (tổng số học viên - instructor)",
-    "quizzes_created": "integer (số quiz đã tạo - instructor)"
+  "status": "string (active|inactive|banned)",
+  "created_at": "datetime",
+  "last_login_at": "datetime",
+  "profile": {
+    "phone": "string (tùy chọn)",
+    "bio": "string (tùy chọn)",
+    "avatar_url": "string (tùy chọn)"
   },
-  "current_enrollments": [
-    {
-      "course_id": "string (UUID)",
-      "course_title": "string (tên khóa học)",
-      "progress": "float (%, 0-100)",
-      "enrolled_at": "string (ISO 8601 datetime)",
-      "status": "string (in-progress|completed|cancelled)"
-    }
-  ],
-  "teaching_classes": [
-    {
-      "class_id": "string (UUID)",
-      "class_name": "string (tên lớp)",
-      "course_title": "string (tên khóa học)",
-      "student_count": "integer (số học viên)",
-      "created_at": "string (ISO 8601 datetime)"
-    }
-  ]
+  "activity_summary": {
+    "courses_enrolled": "number",
+    "classes_created": "number",
+    "total_study_hours": "number",
+    "login_streak_days": "number"
+  }
 }
 ```
-
-**Response Schema (404 Not Found):**
-```json
-{
-  "detail": "string (Không tìm thấy người dùng với ID này)"
-}
-```
-
-**Ghi chú:**
-- Hiển thị thống kê phù hợp với vai trò (student/instructor)
-- `current_enrollments` chỉ có khi role = student
-- `teaching_classes` chỉ có khi role = instructor
 
 ---
 
-### 9.3 Tạo tài khoản người dùng
+### 9.3 Tạo người dùng mới
 **Endpoint:** `POST /api/v1/admin/users`  
 **Quyền:** Admin  
 **Router:** `admin_router.py`  
-**Controller:** `admin_service.create_user`
+**Controller:** `handle_create_user_admin`
 
-**Mô tả:** Admin tạo trực tiếp tài khoản cho người dùng mới. Khi tạo tài khoản Student, hệ thống tự động gửi email kích hoạt để học viên tự đặt mật khẩu. Khi tạo tài khoản Instructor hoặc Admin, admin nhập mật khẩu và chuyển cho người dùng qua kênh liên lạc khác (email riêng, điện thoại, v.v.).
+**Mô tả:** Admin tạo tài khoản mới cho người dùng.
 
 **Request Schema:**
 ```json
 {
-  "full_name": "string (tên đầy đủ, bắt buộc, 2-100 ký tự)",
-  "email": "string (email, bắt buộc, unique, valid email format)",
-  "role": "string (student|instructor|admin, bắt buộc)",
-  "password": "string (mật khẩu, bắt buộc với instructor/admin, min: 8 ký tự)",
-  "bio": "string (tiểu sử, tùy chọn, max: 500 ký tự)",
-  "avatar": "string (URL avatar, tùy chọn)"
+  "full_name": "string (bắt buộc)",
+  "email": "string (bắt buộc, unique)",
+  "password": "string (bắt buộc, tối thiểu 8 ký tự)",
+  "role": "string (student|instructor|admin, mặc định: student)",
+  "status": "string (active|inactive, mặc định: active)"
 }
 ```
-
-**Ghi chú Request:**
-- `password` bắt buộc với role = instructor hoặc admin
-- `password` không cần với role = student (hệ thống gửi email activation)
-- Email phải unique trong hệ thống
 
 **Response Schema (201 Created):**
 ```json
 {
-  "user_id": "string (UUID mới tạo)",
-  "full_name": "string (tên đầy đủ)",
-  "email": "string (email)",
-  "role": "string (vai trò)",
-  "status": "string (active cho instructor/admin, pending cho student)",
-  "activation_sent": "boolean (true nếu đã gửi email activation cho student)",
-  "created_at": "string (ISO 8601 datetime)",
-  "message": "string (Tài khoản đã được tạo thành công)"
+  "user_id": "string (UUID)",
+  "full_name": "string",
+  "email": "string",
+  "role": "string",
+  "status": "string",
+  "created_at": "datetime",
+  "message": "Tài khoản người dùng đã được tạo thành công"
 }
 ```
-
-**Response Schema (400 Bad Request):**
-```json
-{
-  "detail": "string (Email đã tồn tại hoặc lỗi validation khác)"
-}
-```
-
-**Ghi chú:**
-- Student: Gửi email activation tự động, user tự đặt password
-- Instructor/Admin: Admin nhập password, chuyển cho user qua kênh khác
 
 ---
 
@@ -4357,57 +3190,27 @@ course_id: string (tùy chọn, lọc khóa học)
 **Endpoint:** `PUT /api/v1/admin/users/{user_id}`  
 **Quyền:** Admin  
 **Router:** `admin_router.py`  
-**Controller:** `admin_service.update_user`
+**Controller:** `handle_update_user_admin`
 
-**Mô tả:** Chỉnh sửa thông tin của bất kỳ người dùng nào: tên đầy đủ, email, vai trò (nâng cấp/hạ cấp). Frontend validate email không trùng lặp trong hệ thống và hiển thị preview (xem trước) thay đổi trước khi submit để tránh nhầm lẫn.
-
-**Path Parameters:**
-- `user_id` (UUID): ID của người dùng cần cập nhật
+**Mô tả:** Admin chỉnh sửa thông tin người dùng.
 
 **Request Schema:**
 ```json
 {
-  "full_name": "string (tên đầy đủ, tùy chọn)",
-  "email": "string (email, tùy chọn, unique)",
-  "bio": "string (tiểu sử, tùy chọn)",
-  "avatar": "string (URL avatar, tùy chọn)",
-  "status": "string (active|inactive, tùy chọn)"
+  "full_name": "string (tùy chọn)",
+  "email": "string (tùy chọn)",
+  "status": "string (active|inactive|banned, tùy chọn)"
 }
 ```
-
-**Ghi chú Request:**
-- Chỉ gửi các field cần cập nhật (partial update)
-- Email phải unique nếu thay đổi
-- Không cho phép thay đổi `role` qua endpoint này (dùng endpoint 9.6)
 
 **Response Schema (200 OK):**
 ```json
 {
   "user_id": "string (UUID)",
-  "full_name": "string (tên mới)",
-  "email": "string (email mới)",
-  "updated_at": "string (ISO 8601 datetime)",
-  "message": "string (Thông tin người dùng đã được cập nhật)"
+  "message": "Thông tin người dùng đã được cập nhật",
+  "updated_at": "datetime"
 }
 ```
-
-**Response Schema (400 Bad Request):**
-```json
-{
-  "detail": "string (Email đã tồn tại hoặc lỗi validation)"
-}
-```
-
-**Response Schema (404 Not Found):**
-```json
-{
-  "detail": "string (Không tìm thấy người dùng với ID này)"
-}
-```
-
-**Ghi chú:**
-- Frontend hiển thị preview thay đổi trước khi submit
-- Validate email không trùng lặp
 
 ---
 
@@ -4415,46 +3218,16 @@ course_id: string (tùy chọn, lọc khóa học)
 **Endpoint:** `DELETE /api/v1/admin/users/{user_id}`  
 **Quyền:** Admin  
 **Router:** `admin_router.py`  
-**Controller:** `admin_service.delete_user`
+**Controller:** `handle_delete_user_admin`
 
-**Mô tả:** Xóa vĩnh viễn tài khoản người dùng khỏi hệ thống. Yêu cầu xác nhận nghiêm ngặt với dialog cảnh báo rõ ràng. Hệ thống kiểm tra dependencies (phụ thuộc): Instructor có đang dạy lớp nào không, Student có đang học khóa nào không, có khóa học cá nhân nào đã tạo không. Đưa ra cảnh báo chi tiết về những gì sẽ bị ảnh hưởng. Xóa không thể khôi phục.
-
-**Path Parameters:**
-- `user_id` (UUID): ID của người dùng cần xóa
+**Mô tả:** Admin xóa tài khoản người dùng vĩnh viễn.
 
 **Response Schema (200 OK):**
 ```json
 {
-  "user_id": "string (UUID đã xóa)",
-  "message": "string (Người dùng đã được xóa vĩnh viễn)"
+  "message": "Tài khoản người dùng đã được xóa vĩnh viễn"
 }
 ```
-
-**Response Schema (400 Bad Request):**
-```json
-{
-  "detail": "string (Không thể xóa người dùng do có dependencies)",
-  "dependencies": {
-    "teaching_classes": "integer (số lớp đang dạy - instructor)",
-    "active_enrollments": "integer (số khóa đang học - student)",
-    "personal_courses": "integer (số khóa cá nhân đã tạo)",
-    "created_quizzes": "integer (số quiz đã tạo)"
-  }
-}
-```
-
-**Response Schema (404 Not Found):**
-```json
-{
-  "detail": "string (Không tìm thấy người dùng với ID này)"
-}
-```
-
-**Ghi chú:**
-- Frontend hiển thị dialog xác nhận nghiêm ngặt
-- Kiểm tra dependencies trước khi xóa
-- Cảnh báo chi tiết về ảnh hưởng
-- Xóa không thể khôi phục
 
 ---
 
@@ -4462,12 +3235,9 @@ course_id: string (tùy chọn, lọc khóa học)
 **Endpoint:** `PUT /api/v1/admin/users/{user_id}/role`  
 **Quyền:** Admin  
 **Router:** `admin_router.py`  
-**Controller:** `admin_service.change_user_role`
+**Controller:** `handle_change_user_role_admin`
 
-**Mô tả:** Nâng cấp hoặc hạ cấp vai trò của người dùng. Các thay đổi có thể: Student ↔ Instructor ↔ Admin. Frontend hiển thị dialog xác nhận với mô tả chi tiết quyền hạn của vai trò mới. Hệ thống kiểm tra impact (ảnh hưởng) - ví dụ: hạ Instructor xuống Student sẽ ảnh hưởng đến những lớp học nào. Yêu cầu xác nhận cuối cùng.
-
-**Path Parameters:**
-- `user_id` (UUID): ID của người dùng cần thay đổi vai trò
+**Mô tả:** Admin thay đổi vai trò của người dùng.
 
 **Request Schema:**
 ```json
@@ -4480,56 +3250,27 @@ course_id: string (tùy chọn, lọc khóa học)
 ```json
 {
   "user_id": "string (UUID)",
-  "old_role": "string (vai trò cũ)",
-  "new_role": "string (vai trò mới)",
-  "impact": {
-    "description": "string (mô tả ảnh hưởng)",
-    "affected_classes": "integer (số lớp bị ảnh hưởng - nếu downgrade instructor)",
-    "affected_enrollments": "integer (số enrollment bị ảnh hưởng)"
-  },
-  "updated_at": "string (ISO 8601 datetime)",
-  "message": "string (Vai trò đã được thay đổi thành công)"
+  "old_role": "string",
+  "new_role": "string",
+  "message": "Vai trò người dùng đã được thay đổi",
+  "updated_at": "datetime"
 }
 ```
-
-**Response Schema (400 Bad Request):**
-```json
-{
-  "detail": "string (Không thể thay đổi vai trò do có ràng buộc)",
-  "reason": "string (lý do cụ thể)"
-}
-```
-
-**Response Schema (404 Not Found):**
-```json
-{
-  "detail": "string (Không tìm thấy người dùng với ID này)"
-}
-```
-
-**Ghi chú:**
-- Dialog xác nhận với mô tả quyền hạn vai trò mới
-- Kiểm tra impact trước khi thay đổi
-- Downgrade instructor → student: Kiểm tra lớp đang dạy
-- Yêu cầu xác nhận cuối cùng
 
 ---
 
-### 9.7 Reset mật khẩu người dùng
+### 9.7 Đặt lại mật khẩu người dùng
 **Endpoint:** `POST /api/v1/admin/users/{user_id}/reset-password`  
 **Quyền:** Admin  
 **Router:** `admin_router.py`  
-**Controller:** `admin_service.reset_user_password`
+**Controller:** `handle_reset_user_password_admin`
 
-**Mô tả:** Force reset (đặt lại bắt buộc) mật khẩu cho người dùng. Trường hợp sử dụng: người dùng quên mật khẩu, tài khoản bị khóa do nhập sai nhiều lần. Admin có thể reset và gửi mật khẩu mới (gửi ở 1 bên khác, không có trong hệ thống này).
-
-**Path Parameters:**
-- `user_id` (UUID): ID của người dùng cần reset password
+**Mô tả:** Admin đặt lại mật khẩu cho người dùng.
 
 **Request Schema:**
 ```json
 {
-  "new_password": "string (mật khẩu mới, bắt buộc, min: 8 ký tự)"
+  "new_password": "string (bắt buộc, tối thiểu 8 ký tự)"
 }
 ```
 
@@ -4537,117 +3278,502 @@ course_id: string (tùy chọn, lọc khóa học)
 ```json
 {
   "user_id": "string (UUID)",
-  "message": "string (Mật khẩu đã được reset thành công)",
-  "note": "string (Admin cần chuyển mật khẩu mới cho user qua kênh riêng)"
-}
-```
-
-**Response Schema (400 Bad Request):**
-```json
-{
-  "detail": "string (Mật khẩu không hợp lệ - quá ngắn hoặc yếu)"
-}
-```
-
-**Response Schema (404 Not Found):**
-```json
-{
-  "detail": "string (Không tìm thấy người dùng với ID này)"
-}
-```
-
-**Ghi chú:**
-- Admin nhập password mới
-- Admin chuyển password cho user qua kênh riêng (email, phone, v.v.)
-- Không gửi email tự động từ hệ thống
-
----
-
-### 9.8-9.12 Quản lý khóa học
-**Endpoints:**
-- `GET /api/v1/admin/courses` (danh sách)
-- `GET /api/v1/admin/courses/{course_id}` (chi tiết)
-- `POST /api/v1/admin/courses` (tạo)
-- `PUT /api/v1/admin/courses/{course_id}` (chỉnh sửa)
-- `DELETE /api/v1/admin/courses/{course_id}` (xóa)
-
----
-
-### 9.13-9.14 Giám sát lớp học
-**Endpoints:**
-- `GET /api/v1/admin/classes` (danh sách)
-- `GET /api/v1/admin/classes/{class_id}` (chi tiết)
-
----
-
-### 9.15 Dashboard Admin
-**Endpoint:** `GET /api/v1/admin/dashboard`  
-**Quyền:** Admin
-
-**Response Schema (200 OK):**
-```json
-{
-  "total_users": "number",
-  "users_by_role": {
-    "student": "number",
-    "instructor": "number",
-    "admin": "number"
-  },
-  "total_courses": "number",
-  "courses_stats": {
-    "published": "number",
-    "draft": "number"
-  },
-  "total_classes": "number",
-  "active_classes": "number",
-  "total_enrollments": "number"
+  "message": "Mật khẩu đã được đặt lại thành công",
+  "updated_at": "datetime"
 }
 ```
 
 ---
 
-## 10. COMMON FUNCTIONS (5.x)
+### 9.8 Xem danh sách khóa học
+**Endpoint:** `GET /api/v1/admin/courses`  
+**Quyền:** Admin  
+**Router:** `admin_router.py`  
+**Controller:** `handle_list_courses_admin`
 
-### 10.1 Tìm kiếm thông minh (Universal Search)
-**Endpoint:** `GET /api/v1/search`  
-**Quyền:** All roles
+**Mô tả:** Admin xem tất cả khóa học trong hệ thống.
 
 **Query Parameters:**
 ```
-q: string (bắt buộc, từ khóa tìm kiếm)
-type: string (courses|users|modules|lessons, tùy chọn - lọc loại)
-skip: number
-limit: number
+status: string (active|draft|archived, tùy chọn)
+creator_id: string (UUID, tùy chọn - lọc theo người tạo)
+category: string (danh mục, tùy chọn)
+sort_by: string (created_at|enrollment_count|title, mặc định: created_at)
+order: string (asc|desc, mặc định: desc)
+skip: number (pagination)
+limit: number (pagination)
 ```
 
 **Response Schema (200 OK):**
 ```json
 {
-  "results": [
+  "data": [
     {
-      "id": "string (UUID)",
-      "type": "string (course|user|module|lesson)",
+      "course_id": "string (UUID)",
       "title": "string",
-      "description": "string (2-3 dòng)",
-      "relevance_score": "number (0-100)"
+      "creator_name": "string",
+      "category": "string",
+      "level": "string",
+      "status": "string (active|draft|archived)",
+      "enrollment_count": "number",
+      "created_at": "datetime",
+      "last_updated": "datetime"
     }
   ],
-  "total": "number"
+  "total": "number",
+  "skip": "number",
+  "limit": "number"
 }
 ```
 
 ---
 
-### 10.2 Bộ lọc nâng cao
-**Endpoint:** `GET /api/v1/search/filter`  
-**Quyền:** All roles
+### 9.9 Xem chi tiết khóa học
+**Endpoint:** `GET /api/v1/admin/courses/{course_id}`  
+**Quyền:** Admin  
+**Router:** `admin_router.py`  
+**Controller:** `handle_get_course_detail_admin`
+
+**Mô tả:** Admin xem thông tin chi tiết khóa học và thống kê.
+
+**Response Schema (200 OK):**
+```json
+{
+  "course_id": "string (UUID)",
+  "title": "string",
+  "description": "string",
+  "creator": {
+    "user_id": "string (UUID)",
+    "full_name": "string",
+    "email": "string"
+  },
+  "category": "string",
+  "level": "string",
+  "status": "string",
+  "enrollment_stats": {
+    "total_enrollments": "number",
+    "active_students": "number",
+    "completion_rate": "number (0-100%)"
+  },
+  "content_stats": {
+    "total_modules": "number",
+    "total_lessons": "number",
+    "total_quizzes": "number"
+  },
+  "created_at": "datetime",
+  "last_updated": "datetime"
+}
+```
+
+---
+
+### 9.10 Tạo khóa học mới
+**Endpoint:** `POST /api/v1/admin/courses`  
+**Quyền:** Admin  
+**Router:** `admin_router.py`  
+**Controller:** `handle_create_course_admin`
+
+**Mô tả:** Admin tạo khóa học mới thay mặt cho giảng viên.
+
+**Request Schema:**
+```json
+{
+  "title": "string (bắt buộc)",
+  "description": "string (bắt buộc)",
+  "creator_id": "string (UUID giảng viên, bắt buộc)",
+  "category": "string (bắt buộc)",
+  "level": "string (Beginner|Intermediate|Advanced, bắt buộc)",
+  "status": "string (active|draft, mặc định: draft)"
+}
+```
+
+**Response Schema (201 Created):**
+```json
+{
+  "course_id": "string (UUID)",
+  "title": "string",
+  "creator_name": "string",
+  "status": "string",
+  "created_at": "datetime",
+  "message": "Khóa học đã được tạo thành công"
+}
+```
+
+---
+
+### 9.11 Cập nhật khóa học
+**Endpoint:** `PUT /api/v1/admin/courses/{course_id}`  
+**Quyền:** Admin  
+**Router:** `admin_router.py`  
+**Controller:** `handle_update_course_admin`
+
+**Mô tả:** Admin chỉnh sửa thông tin khóa học.
+
+**Request Schema:**
+```json
+{
+  "title": "string (tùy chọn)",
+  "description": "string (tùy chọn)",
+  "category": "string (tùy chọn)",
+  "level": "string (tùy chọn)",
+  "status": "string (active|draft|archived, tùy chọn)"
+}
+```
+
+**Response Schema (200 OK):**
+```json
+{
+  "course_id": "string (UUID)",
+  "message": "Khóa học đã được cập nhật",
+  "updated_at": "datetime"
+}
+```
+
+---
+
+### 9.12 Xóa khóa học
+**Endpoint:** `DELETE /api/v1/admin/courses/{course_id}`  
+**Quyền:** Admin  
+**Router:** `admin_router.py`  
+**Controller:** `handle_delete_course_admin`
+
+**Mô tả:** Admin xóa khóa học vĩnh viễn (chỉ khi không có học viên đang học).
+
+**Response Schema (200 OK):**
+```json
+{
+  "message": "Khóa học đã được xóa vĩnh viễn"
+}
+```
+
+---
+
+### 9.13 Xem danh sách lớp học
+**Endpoint:** `GET /api/v1/admin/classes`  
+**Quyền:** Admin  
+**Router:** `admin_router.py`  
+**Controller:** `handle_list_classes_admin`
+
+**Mô tả:** Admin xem tất cả lớp học trong hệ thống.
 
 **Query Parameters:**
 ```
-resource: string (courses - loại tài nguyên)
-category: string (danh mục)
-level: string (cấp độ)
-instructor_id: string (UUID giảng viên)
+status: string (active|completed, tùy chọn)
+instructor_id: string (UUID, tùy chọn - lọc theo giảng viên)
+course_id: string (UUID, tùy chọn - lọc theo khóa học)
+sort_by: string (created_at|student_count|name, mặc định: created_at)
+order: string (asc|desc, mặc định: desc)
+skip: number (pagination)
+limit: number (pagination)
+```
+
+**Response Schema (200 OK):**
+```json
+{
+  "data": [
+    {
+      "class_id": "string (UUID)",
+      "class_name": "string",
+      "course_title": "string",
+      "instructor_name": "string",
+      "student_count": "number",
+      "status": "string (active|completed)",
+      "created_at": "datetime"
+    }
+  ],
+  "total": "number",
+  "skip": "number",
+  "limit": "number"
+}
+```
+
+---
+
+### 9.14 Xem chi tiết lớp học
+**Endpoint:** `GET /api/v1/admin/classes/{class_id}`  
+**Quyền:** Admin  
+**Router:** `admin_router.py`  
+**Controller:** `handle_get_class_detail_admin`
+
+**Mô tả:** Admin xem thông tin chi tiết lớp học và thống kê.
+
+**Response Schema (200 OK):**
+```json
+{
+  "class_id": "string (UUID)",
+  "class_name": "string",
+  "course": {
+    "course_id": "string (UUID)",
+    "title": "string",
+    "category": "string"
+  },
+  "instructor": {
+    "user_id": "string (UUID)",
+    "full_name": "string",
+    "email": "string"
+  },
+  "student_count": "number",
+  "invite_code": "string",
+  "status": "string",
+  "class_stats": {
+    "average_progress": "number (0-100%)",
+    "completion_rate": "number (0-100%)",
+    "active_students_today": "number"
+  },
+  "created_at": "datetime",
+  "start_date": "datetime",
+  "end_date": "datetime"
+}
+```
+
+---
+
+### 9.16 Xem dashboard admin tổng quan
+**Endpoint:** `GET /api/v1/admin/dashboard`  
+**Quyền:** Admin  
+**Router:** `dashboard_router.py`  
+**Controller:** `handle_get_admin_dashboard`
+
+**Mô tả:** Thống kê tổng quan toàn hệ thống cho admin.
+
+**Response Schema (200 OK):**
+```json
+{
+  "system_stats": {
+    "total_users": "number",
+    "total_courses": "number", 
+    "total_classes": "number",
+    "total_enrollments": "number"
+  },
+  "growth_metrics": {
+    "new_users_today": "number",
+    "new_users_this_week": "number",
+    "new_courses_this_month": "number",
+    "active_users_today": "number"
+  },
+  "popular_courses": [
+    {
+      "course_id": "string (UUID)",
+      "title": "string",
+      "enrollment_count": "number",
+      "completion_rate": "number (0-100%)"
+    }
+  ],
+  "recent_activities": [
+    {
+      "type": "string (user_registered|course_created|class_created)",
+      "description": "string",
+      "timestamp": "datetime"
+    }
+  ]
+}
+```
+
+---
+
+### 9.17 Xem dashboard giảng viên
+**Endpoint:** `GET /api/v1/dashboard/instructor`  
+**Quyền:** Instructor  
+**Router:** `dashboard_router.py`  
+**Controller:** `handle_get_instructor_dashboard`
+
+**Mô tả:** Dashboard tổng quan cho giảng viên về các lớp học và học viên.
+
+**Response Schema (200 OK):**
+```json
+{
+  "instructor_id": "string (UUID)",
+  "overview": {
+    "total_classes": "number",
+    "total_students": "number",
+    "active_classes": "number",
+    "average_completion_rate": "number (0-100%)"
+  },
+  "recent_classes": [
+    {
+      "class_id": "string (UUID)",
+      "class_name": "string",
+      "student_count": "number",
+      "recent_activity": "datetime"
+    }
+  ],
+  "student_activities": [
+    {
+      "student_name": "string",
+      "class_name": "string", 
+      "activity": "string (completed_lesson|passed_quiz)",
+      "timestamp": "datetime"
+    }
+  ],
+  "upcoming_deadlines": [
+    {
+      "class_name": "string",
+      "task": "string",
+      "due_date": "datetime"
+    }
+  ]
+}
+```
+
+---
+
+### 9.15 Thống kê tăng trưởng người dùng
+**Endpoint:** `GET /api/v1/admin/analytics/users-growth`  
+**Quyền:** Admin  
+**Router:** `analytics_router.py`  
+**Controller:** `handle_get_admin_users_growth`
+
+**Mô tả:** Biểu đồ tăng trưởng người dùng theo thời gian.
+
+**Query Parameters:**
+```
+period: string (30days|90days|1year, mặc định: 90days)
+group_by: string (day|week|month, mặc định: week)
+```
+
+**Response Schema (200 OK):**
+```json
+{
+  "period": "string",
+  "growth_data": [
+    {
+      "date": "date (YYYY-MM-DD)",
+      "new_users": "number",
+      "total_users": "number",
+      "new_students": "number",
+      "new_instructors": "number"
+    }
+  ],
+  "summary": {
+    "total_growth_rate": "number (%)",
+    "average_daily_signups": "number",
+    "peak_signup_day": {
+      "date": "date",
+      "count": "number"
+    }
+  }
+}
+```
+
+---
+
+### 9.18 Thống kê khóa học hệ thống
+**Endpoint:** `GET /api/v1/admin/analytics/courses`  
+**Quyền:** Admin  
+**Router:** `analytics_router.py`  
+**Controller:** `handle_get_admin_courses_analytics`
+
+**Mô tả:** Phân tích hiệu suất các khóa học trong hệ thống. Top courses được tính dựa trên số lượng enrollments trong time_range, sử dụng field `enrolled_at` (không phải `created_at`) để filter chính xác thời điểm học viên đăng ký khóa học.
+
+**Response Schema (200 OK):**
+```json
+{
+  "course_metrics": {
+    "total_courses": "number",
+    "public_courses": "number", 
+    "personal_courses": "number",
+    "average_enrollment_per_course": "number"
+  },
+  "top_courses": [
+    {
+      "course_id": "string (UUID)",
+      "title": "string",
+      "creator": "string (instructor name)",
+      "enrollment_count": "number",
+      "completion_rate": "number (0-100%)",
+      "average_rating": "number (0-5.0)"
+    }
+  ],
+  "category_breakdown": [
+    {
+      "category": "string",
+      "course_count": "number",
+      "total_enrollments": "number"
+    }
+  ]
+}
+```
+
+---
+
+### 9.19 Giám sát sức khỏe hệ thống
+**Endpoint:** `GET /api/v1/admin/analytics/system-health`  
+**Quyền:** Admin  
+**Router:** `analytics_router.py`  
+**Controller:** `handle_get_admin_system_health`
+
+**Mô tả:** Thống kê tình trạng hoạt động và hiệu suất hệ thống.
+
+**Response Schema (200 OK):**
+```json
+{
+  "system_status": "string (healthy|warning|critical)",
+  "performance_metrics": {
+    "average_response_time": "number (ms)",
+    "api_success_rate": "number (0-100%)",
+    "concurrent_users": "number",
+    "server_uptime": "number (hours)"
+  },
+  "resource_usage": {
+    "database_size": "number (MB)",
+    "storage_used": "number (GB)",
+    "memory_usage": "number (%)",
+    "cpu_usage": "number (%)"
+  },
+  "recent_errors": [
+    {
+      "error_type": "string",
+      "count": "number",
+      "last_occurrence": "datetime"
+    }
+  ]
+}
+```
+
+---
+
+## 10. CHỨC NĂNG CHUNG (5.x)
+
+### 10.1 Tìm kiếm toàn cầu
+**Endpoint:** `GET /api/v1/search`  
+**Quyền:** All roles  
+**Router:** `search_router.py`  
+**Controller:** `handle_global_search`
+
+**Mô tả:** Tìm kiếm thông minh tất cả nội dung: khóa học, lớp học, người dùng, bài học.
+
+**Query Parameters:**
+```
+q: string (từ khóa tìm kiếm, bắt buộc)
+type: string (courses|classes|users|lessons, tùy chọn - lọc loại kết quả)
+category: string (danh mục khóa học, tùy chọn)
+level: string (Beginner|Intermediate|Advanced, tùy chọn)
+skip: number (pagination)
+limit: number (pagination, tối đa: 50)
+```
+
+**Response Schema (200 OK):**
+```json
+{
+  "query": "string",
+  "total_results": "number",
+  "results": [
+    {
+      "type": "string (course|class|user|lesson)",
+      "id": "string (UUID)",
+      "title": "string",
+      "description": "string",
+      "thumbnail_url": "string (tùy chọn)",
+      "relevance_score": "number (0-100)",
+      "highlight": "string (đoạn text có từ khóa được highlight)"
+    }
+  ],
+  "suggestions": ["string array (gợi ý từ khóa liên quan)"],
+  "filters": {
+    "available_categories": ["string array"],
+    "available_levels": ["string array"]
+  }
+}
 ```
 
 ---

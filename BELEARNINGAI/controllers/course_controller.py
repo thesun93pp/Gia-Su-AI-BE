@@ -25,7 +25,7 @@ from schemas.course import (
     CourseEnrollmentStatusResponse
 )
 from schemas.admin import (
-    AdminCourseListResponse,
+    
     AdminCourseDetailResponse,
     AdminCourseCreateRequest,
     AdminCourseCreateResponse,
@@ -500,51 +500,6 @@ async def handle_check_course_enrollment_status(
 # ADMIN COURSE MANAGEMENT HANDLERS (Section 4.2)
 # ============================================================================
 
-async def handle_list_courses_admin(
-    current_user: dict,
-    author_id: Optional[str] = None,
-    status: Optional[str] = None,
-    category: Optional[str] = None,
-    course_type: Optional[str] = None,
-    search: Optional[str] = None,
-    sort_by: str = "created_at",
-    sort_order: str = "desc",
-    skip: int = 0,
-    limit: int = 50
-) -> AdminCourseListResponse:
-    """
-    4.2.1: Xem tất cả khóa học (Admin)
-    GET /api/v1/admin/courses
-    
-    Args:
-        current_user: Admin user
-        author_id, status, category, course_type: Filters
-        search, sort_by, sort_order: Query params
-        skip, limit: Pagination
-        
-    Returns:
-        AdminCourseListResponse
-    """
-    try:
-        result = await course_service.list_all_courses_admin(
-            author_id=author_id,
-            status=status,
-            category=category,
-            course_type=course_type,
-            search=search,
-            sort_by=sort_by,
-            sort_order=sort_order,
-            skip=skip,
-            limit=limit
-        )
-        
-        return AdminCourseListResponse(**result)
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Lỗi khi lấy danh sách courses: {str(e)}"
-        )
 
 
 async def handle_get_course_detail_admin(

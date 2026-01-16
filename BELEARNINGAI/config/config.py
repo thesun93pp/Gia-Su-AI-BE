@@ -4,11 +4,18 @@ from functools import lru_cache
 from typing import List, Optional
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"
+    )
 
     # Application Settings
     app_name: str = Field(default="AI Learning Platform API", alias="APP_NAME")
@@ -18,7 +25,8 @@ class Settings(BaseSettings):
     api_prefix: str = Field(default="/api/v1", alias="API_PREFIX")
 
     # Database Configuration
-    mongodb_url: str = Field(default="mongodb://localhost:27017", alias="MONGODB_URL")
+    # mongodb_url: str = Field(default="mongodb://localhost:27017", alias="MONGODB_URL")
+    mongodb_url: str = Field(alias="MONGODB_URL")
     mongodb_database: str = Field(default="ai_learning_app", alias="MONGODB_DATABASE")
     
     # JWT Authentication Settings
@@ -29,7 +37,7 @@ class Settings(BaseSettings):
     
     # AI Services (Google GenAI / Gemini)
     google_api_key: str = Field(..., alias="GOOGLE_API_KEY")
-    gemini_model: str = Field(default="gemini-1.5-pro", alias="GEMINI_MODEL")
+    gemini_model: str = Field(default="gemini-2.5-pro", alias="GEMINI_MODEL")
     
     # Redis Cache (Optional)
     redis_url: Optional[str] = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
@@ -50,7 +58,6 @@ class Settings(BaseSettings):
     
     # File Storage
     storage_type: str = Field(default="local", alias="STORAGE_TYPE")
-    upload_dir: str = Field(default="./uploads", alias="UPLOAD_DIR")
     max_upload_size_mb: int = Field(default=50, alias="MAX_UPLOAD_SIZE_MB")
     s3_access_key_id: Optional[str] = Field(default=None, alias="S3_ACCESS_KEY_ID")
     s3_secret_access_key: Optional[str] = Field(default=None, alias="S3_SECRET_ACCESS_KEY")
@@ -70,12 +77,6 @@ class Settings(BaseSettings):
     enable_ai_chat: bool = Field(default=True, alias="ENABLE_AI_CHAT")
     enable_email_notifications: bool = Field(default=True, alias="ENABLE_EMAIL_NOTIFICATIONS")
     enable_vector_search: bool = Field(default=False, alias="ENABLE_VECTOR_SEARCH")
-
-    class Config:
-        """Pydantic config for loading from .env file."""
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
 
     def get_allowed_origins_list(self) -> List[str]:
         """Parse ALLOWED_ORIGINS from comma-separated string to list."""

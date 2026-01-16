@@ -207,19 +207,50 @@ async def handle_attempt_quiz(
     # Ensure submitted_at is set
     if not attempt.submitted_at:
         attempt.submitted_at = datetime.utcnow()
-    
-    return QuizAttemptResponse(
-        attempt_id=str(attempt.id),
-        quiz_id=str(quiz_id),
-        score=attempt.score,
-        passed=attempt.passed,
-        total_questions=attempt.total_questions,
-        correct_answers=attempt.correct_answers,
-        time_spent_minutes=attempt.time_spent_seconds // 60,
-        attempt_number=attempt.attempt_number,
-        submitted_at=attempt.submitted_at,
-        message="Chúc mừng! Bạn đã pass quiz" if attempt.passed else "Bạn chưa đạt điểm pass. Hãy thử lại!"
-    )
+
+    # Base response
+    response_data = {
+        "attempt_id": str(attempt.id),
+        "quiz_id": str(quiz_id),
+        "score": attempt.score,
+        "passed": attempt.passed,
+        "total_questions": attempt.total_questions,
+        "correct_answers": attempt.correct_answers,
+        "time_spent_minutes": attempt.time_spent_seconds // 60,
+        "attempt_number": attempt.attempt_number,
+        "submitted_at": attempt.submitted_at,
+        "message": "Chúc mừng! Bạn đã pass quiz" if attempt.passed else "Bạn chưa đạt điểm pass. Hãy thử lại!"
+    }
+
+    # ✅ MODULE ASSESSMENT REVIEW: Nếu là module assessment và FAIL
+    if quiz.module_id and quiz.quiz_type == "final_check" and not attempt.passed:
+        try:
+            from services.module_assessment_review_service import analyze_module_assessment_result
+
+            # Lấy enrollment_id
+            enrollment = await enrollment_service.get_user_enrollment(user_id, quiz.course_id)
+            if enrollment:
+                # Phân tích và đánh dấu lessons cần review
+                analysis = await analyze_module_assessment_result(
+                    quiz_attempt_id=str(attempt.id),
+                    enrollment_id=str(enrollment.id)
+                )
+
+                # Thêm vào response
+                response_data["lessons_to_review"] = analysis.get("lessons_to_review", [])
+                response_data["skill_gaps_summary"] = analysis.get("skill_gaps_summary", {})
+
+                # Cập nhật message nếu có lessons cần review
+                if analysis.get("lessons_to_review"):
+                    lesson_count = len(analysis["lessons_to_review"])
+                    response_data["message"] = f"Bạn cần xem lại {lesson_count} lesson(s) để cải thiện kiến thức"
+        except Exception as e:
+            # Log error nhưng không fail request
+            print(f"⚠️ Module assessment review analysis failed: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+    return QuizAttemptResponse(**response_data)
 
 
 # ============================================================================

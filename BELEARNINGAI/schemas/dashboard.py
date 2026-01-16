@@ -8,23 +8,58 @@ from datetime import datetime
 from typing import List, Optional
 
 
-class InProgressCourse(BaseModel):
+class OverviewStats(BaseModel):
+    total_courses_enrolled: int
+    active_courses: int = Field(..., description="đang học")
+    completed_courses: int
+    total_lessons_completed: int
+    total_study_hours: int
+    current_streak_days: int = Field(..., description="số ngày học liên tiếp")
+
+
+class PerformanceSummary(BaseModel):
+    average_quiz_score: float = Field(..., description="0-100, điểm trung bình tất cả quiz")
+    quiz_pass_rate: float = Field(..., description="0-100, tỷ lệ pass %")
+    lessons_this_week: int = Field(..., description="số lessons hoàn thành tuần này")
+
+
+class Recommendation(BaseModel):
     course_id: str = Field(..., description="UUID")
     title: str
-    progress: float = Field(..., description="0-100")
+    reason: str = Field(..., description="lý do gợi ý ngắn gọn")
+
+
+class NextLesson(BaseModel):
+    lesson_id: str = Field(..., description="UUID")
+    title: str
+
+
+class RecentCourse(BaseModel):
+    course_id: str = Field(..., description="UUID")
+    title: str
+    thumbnail_url: Optional[str] = None
+    progress_percent: float = Field(..., description="0-100")
     last_accessed: datetime
+    next_lesson: NextLesson
 
 
 class PendingQuiz(BaseModel):
     quiz_id: str = Field(..., description="UUID")
     title: str
     course_title: str
-    due_at: Optional[datetime] = None
+    lesson_title: str
+    due_date: Optional[datetime] = None
+    status: str = Field(..., description="not_started|failed - cần làm lại")
 
 
 class StudentDashboardResponse(BaseModel):
-    in_progress_courses: List[InProgressCourse]
+    user_id: str = Field(..., description="UUID")
+    full_name: str
+    overview: OverviewStats
+    recent_courses: List[RecentCourse]
     pending_quizzes: List[PendingQuiz]
+    performance_summary: PerformanceSummary
+    recommendations: List[Recommendation]
 
 
 class CourseStats(BaseModel):

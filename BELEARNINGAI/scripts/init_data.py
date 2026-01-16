@@ -5,9 +5,13 @@ Dữ liệu được sinh ra có tính logic, thực tế và đa dạng.
 """
 import asyncio
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 import json
 >>>>>>> origin/tasks/uploadImg
+=======
+import json
+>>>>>>> epics
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any
@@ -21,12 +25,17 @@ import random
 # Thêm đường dẫn gốc của dự án vào sys.path
 import sys
 <<<<<<< HEAD
+<<<<<<< HEAD
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 =======
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 >>>>>>> origin/tasks/uploadImg
+=======
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+>>>>>>> epics
 
 
 from config.config import get_settings
@@ -34,10 +43,15 @@ from models.models import (
     User,
     Course,
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
     EmbeddedModule,
     EmbeddedLesson,
 >>>>>>> origin/tasks/uploadImg
+=======
+    EmbeddedModule,
+    EmbeddedLesson,
+>>>>>>> epics
     Module,
     Lesson,
     Enrollment,
@@ -46,9 +60,13 @@ from models.models import (
     QuizAttempt,
     Progress,
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
     LessonProgressItem,
 >>>>>>> origin/tasks/uploadImg
+=======
+    LessonProgressItem,
+>>>>>>> epics
     Conversation,
     Class,
     Recommendation,
@@ -142,11 +160,14 @@ async def seed_users() -> Dict[str, List[str]]:
         print(f"👨‍🏫 Đã chuẩn bị Giảng viên: {instructor.full_name} ({instructor.email})")
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     # 3. Tạo Học viên
     for i in range(10):
         full_name = fake.name()
         # Tạo email hợp lệ bằng cách sử dụng fake.email() hoặc tạo từ username đơn giản
 =======
+=======
+>>>>>>> epics
     # 3. Tạo Học viên TEST (với password cố định để dễ test)
     test_students = [
         {"full_name": "Nguyễn Văn Test", "email": "student.test1@example.com"},
@@ -174,7 +195,10 @@ async def seed_users() -> Dict[str, List[str]]:
     # 4. Tạo thêm học viên ngẫu nhiên
     for i in range(7):
         full_name = fake.name()
+<<<<<<< HEAD
 >>>>>>> origin/tasks/uploadImg
+=======
+>>>>>>> epics
         email = fake.email()
         student = User(
             full_name=full_name,
@@ -203,6 +227,7 @@ async def seed_users() -> Dict[str, List[str]]:
 
 async def seed_courses(user_ids: Dict[str, List[str]]) -> Dict[str, str]:
     """
+<<<<<<< HEAD
 <<<<<<< HEAD
     Tạo dữ liệu mẫu cho các khóa học (Course).
     - 8 khóa học thuộc các lĩnh vực và cấp độ khác nhau.
@@ -428,6 +453,8 @@ async def seed_modules_and_lessons(course_ids: Dict[str, str]) -> Dict[str, List
 
     print(f"✅ Đã tạo thành công {len(modules_to_create)} modules và {len(lessons_to_create)} lessons.")
 =======
+=======
+>>>>>>> epics
     Tạo 6 khóa học admin published với đầy đủ cấu trúc:
     - 1 khóa Python siêu chi tiết (như cũ)
     - 5 khóa khác với 2 modules mỗi khóa
@@ -463,7 +490,11 @@ Khóa học bao gồm:
 - ✅ Hỗ trợ 1-1 với instructor
 
 Phù hợp cho: Người mới bắt đầu lập trình, sinh viên IT, developer muốn học Python
+<<<<<<< HEAD
         """.strip(),
+=======
+        """,
+>>>>>>> epics
         category="Programming",
         level="Beginner",
         thumbnail_url="https://images.unsplash.com/photo-1526379095098-d400fd0bf935?w=800&h=450",
@@ -942,7 +973,11 @@ for row in matrix:
                 "code_snippets": [
                     {
                         "language": "python",
+<<<<<<< HEAD
                         "code": f"# Code example for {lesson_info['title']}\\nprint('Hello from lesson {lesson_order} module {module_order}')",
+=======
+                        "code": f"# Code example for {lesson_info['title']}\nprint('Hello from lesson {lesson_order} module {module_order}')",
+>>>>>>> epics
                         "description": f"Example code for {lesson_info['title']}"
                     }
                 ]
@@ -1104,17 +1139,24 @@ for row in matrix:
     print(f"   🔹 Separate Module documents (cho detailed access)")  
     print(f"   🔹 Separate Lesson documents (cho full content)")
     print(f"   🔗 Linking: Course.modules[].id === Module.id === Lesson.module_id")
+<<<<<<< HEAD
 >>>>>>> origin/tasks/uploadImg
+=======
+>>>>>>> epics
     return all_lesson_ids
 
 async def seed_enrollments(user_ids: Dict[str, List[str]], course_ids: Dict[str, str]) -> List[str]:
     """
     Tạo dữ liệu mẫu cho việc đăng ký khóa học (Enrollment).
 <<<<<<< HEAD
+<<<<<<< HEAD
     - Mỗi học viên sẽ đăng ký từ 2-5 khóa học ngẫu nhiên.
 =======
     - Mỗi học viên sẽ đăng ký vào khóa học Python duy nhất.
 >>>>>>> origin/tasks/uploadImg
+=======
+    - Mỗi học viên sẽ đăng ký vào khóa học Python duy nhất.
+>>>>>>> epics
     - Trạng thái và tiến độ đăng ký sẽ được sinh ngẫu nhiên.
     """
     print("\n--- Bắt đầu tạo dữ liệu cho Enrollments ---")
@@ -1123,19 +1165,25 @@ async def seed_enrollments(user_ids: Dict[str, List[str]], course_ids: Dict[str,
     enrollment_ids = []
     student_ids = user_ids["student"]
 <<<<<<< HEAD
+<<<<<<< HEAD
     course_id_list = list(course_ids.values())
 
     for student_id in student_ids:
         num_enrollments = random.randint(2, 5)
         enrolled_courses = random.sample(course_id_list, num_enrollments)
 =======
+=======
+>>>>>>> epics
     # Chỉ có 1 khóa học Python duy nhất
     python_course_id = course_ids["Lập trình Python từ Cơ bản đến Nâng cao"]
 
     for student_id in student_ids:
         # Mỗi student enroll vào khóa Python duy nhất
         enrolled_courses = [python_course_id]
+<<<<<<< HEAD
 >>>>>>> origin/tasks/uploadImg
+=======
+>>>>>>> epics
         
         for course_id in enrolled_courses:
             status = random.choice(["active", "completed", "cancelled"])
@@ -1280,6 +1328,7 @@ async def seed_progress(enrollment_ids: List[str]):
                 completion_date = enrollment.enrolled_at + timedelta(days=random.randint(1, 20))
             
 <<<<<<< HEAD
+<<<<<<< HEAD
             lessons_progress.append({
                 "lesson_id": lesson.id,
                 "lesson_title": lesson.title,
@@ -1288,6 +1337,8 @@ async def seed_progress(enrollment_ids: List[str]):
                 "time_spent_minutes": random.randint(5, 60) if status == "completed" else 0
             })
 =======
+=======
+>>>>>>> epics
             lessons_progress.append(LessonProgressItem(
                 lesson_id=str(lesson.id),
                 lesson_title=lesson.title,
@@ -1296,7 +1347,10 @@ async def seed_progress(enrollment_ids: List[str]):
                 time_spent_minutes=random.randint(5, 60) if status == "completed" else 0,
                 video_progress_seconds=random.randint(0, 1800) if status in ["in-progress", "completed"] else 0
             ))
+<<<<<<< HEAD
 >>>>>>> origin/tasks/uploadImg
+=======
+>>>>>>> epics
 
         progress = Progress(
             user_id=enrollment.user_id,
@@ -1318,6 +1372,7 @@ async def seed_progress(enrollment_ids: List[str]):
     
     print(f"✅ Đã tạo thành công {len(progress_to_create)} bản ghi tiến độ học tập.")
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 async def seed_assessment_sessions(user_ids: Dict[str, List[str]]):
     """
@@ -1406,6 +1461,9 @@ async def seed_assessment_sessions(user_ids: Dict[str, List[str]]):
         
     print(f"✅ Đã tạo thành công {len(sessions_to_create)} phiên đánh giá năng lực.")
 =======
+=======
+
+>>>>>>> epics
 async def seed_assessment_sessions(user_ids: Dict[str, List[str]], course_ids: Dict[str, str]):
     """
     Tạo dữ liệu mẫu cho các phiên đánh giá năng lực (AssessmentSession).
@@ -1554,7 +1612,10 @@ async def seed_assessment_sessions(user_ids: Dict[str, List[str]], course_ids: D
         await AssessmentSession.insert_many(sessions_to_create)
 
     print(f"✅ Đã tạo thành công {len(sessions_to_create)} assessment sessions cho Adaptive Learning")
+<<<<<<< HEAD
 >>>>>>> origin/tasks/uploadImg
+=======
+>>>>>>> epics
 
 async def seed_conversations(user_ids: Dict[str, List[str]], course_ids: Dict[str, str]):
     """
@@ -1620,18 +1681,25 @@ async def seed_classes(user_ids: Dict[str, List[str]], course_ids: Dict[str, str
     """
     Tạo dữ liệu mẫu cho các lớp học (Class).
 <<<<<<< HEAD
+<<<<<<< HEAD
     - Mỗi giảng viên tạo 1-2 lớp học cho các khóa học khác nhau.
 =======
     - Mỗi giảng viên tạo 2-3 lớp học cho các khóa học khác nhau
     - Mỗi lớp có 5-15 học viên
     - Status: preparing, active, hoặc completed
 >>>>>>> origin/tasks/uploadImg
+=======
+    - Mỗi giảng viên tạo 2-3 lớp học cho các khóa học khác nhau
+    - Mỗi lớp có 5-15 học viên
+    - Status: preparing, active, hoặc completed
+>>>>>>> epics
     """
     print("\n--- Bắt đầu tạo dữ liệu cho Classes ---")
     
     classes_to_create = []
     instructor_ids = user_ids["instructor"]
     student_ids = user_ids["student"]
+<<<<<<< HEAD
 <<<<<<< HEAD
     course_id_list = list(course_ids.values())
 
@@ -1650,6 +1718,8 @@ async def seed_classes(user_ids: Dict[str, List[str]], course_ids: Dict[str, str
                 name=f"Lớp {course_info.title} - K{random.randint(1, 5)}",
                 description=f"Lớp học chuyên sâu về {course_info.title} do giảng viên hướng dẫn.",
 =======
+=======
+>>>>>>> epics
     
     # Lấy danh sách courses (chỉ admin courses, không lấy personal)
     available_courses = list(course_ids.items())
@@ -1696,11 +1766,15 @@ async def seed_classes(user_ids: Dict[str, List[str]], course_ids: Dict[str, str
             class_item = Class(
                 name=f"Lớp {course_info.title[:30]}... - {semester}.{class_number}",
                 description=f"Lớp học chuyên sâu về {course_info.title}. Giảng viên sẽ hướng dẫn chi tiết từng bài học, hỗ trợ 1-1 và review bài tập. Lớp học online qua Zoom với lịch cố định.",
+<<<<<<< HEAD
 >>>>>>> origin/tasks/uploadImg
+=======
+>>>>>>> epics
                 course_id=course_id,
                 instructor_id=instructor_id,
                 max_students=random.randint(20, 50),
                 start_date=start_date,
+<<<<<<< HEAD
 <<<<<<< HEAD
                 end_date=start_date + timedelta(days=random.randint(30, 60)),
                 status=random.choice(["preparing", "active"]),
@@ -1714,6 +1788,8 @@ async def seed_classes(user_ids: Dict[str, List[str]], course_ids: Dict[str, str
         
     print(f"✅ Đã tạo thành công {len(classes_to_create)} lớp học.")
 =======
+=======
+>>>>>>> epics
                 end_date=end_date,
                 status=status,
                 student_ids=selected_students,
@@ -1735,7 +1811,10 @@ async def seed_classes(user_ids: Dict[str, List[str]], course_ids: Dict[str, str
     print(f"   - Active: {active_count}")
     print(f"   - Preparing: {preparing_count}")
     print(f"   - Completed: {completed_count}")
+<<<<<<< HEAD
 >>>>>>> origin/tasks/uploadImg
+=======
+>>>>>>> epics
 
 async def seed_recommendations(user_ids: Dict[str, List[str]]):
     """
@@ -1777,10 +1856,14 @@ async def seed_recommendations(user_ids: Dict[str, List[str]]):
             recommended_courses=recommended_courses,
             ai_personalized_advice="Để phát triển tốt nhất, bạn nên tập trung vào các khóa học được đề xuất và hoàn thành các bài tập thực hành.",
 <<<<<<< HEAD
+<<<<<<< HEAD
             created_at=session.evaluated_at + timedelta(seconds=random.randint(60, 120))
 =======
             created_at=(session.evaluated_at or datetime.now(timezone.utc)) + timedelta(seconds=random.randint(60, 120))
 >>>>>>> origin/tasks/uploadImg
+=======
+            created_at=(session.evaluated_at or datetime.now(timezone.utc)) + timedelta(seconds=random.randint(60, 120))
+>>>>>>> epics
         )
         recommendations_to_create.append(recommendation)
 
@@ -1791,7 +1874,10 @@ async def seed_recommendations(user_ids: Dict[str, List[str]]):
 
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> epics
 async def seed_personal_courses(user_ids: Dict[str, List[str]]) -> List[str]:
     """
     Tạo Personal Courses (Khóa học cá nhân) do STUDENT tự tạo.
@@ -1947,7 +2033,10 @@ async def seed_personal_courses(user_ids: Dict[str, List[str]]) -> List[str]:
     return personal_course_ids
 
 
+<<<<<<< HEAD
 >>>>>>> origin/tasks/uploadImg
+=======
+>>>>>>> epics
 async def main():
     """Hàm chính để chạy script."""
     await init_db()
@@ -1958,6 +2047,7 @@ async def main():
     await seed_quizzes_and_attempts(user_ids, lesson_ids)
     await seed_progress(enrollment_ids)
 <<<<<<< HEAD
+<<<<<<< HEAD
     await seed_assessment_sessions(user_ids)
     await seed_conversations(user_ids, course_ids)
     await seed_classes(user_ids, course_ids)
@@ -1965,6 +2055,8 @@ async def main():
     # Các hàm seed khác sẽ được gọi ở đây
     print("\n🎉 Hoàn tất quá trình khởi tạo dữ liệu mẫu!")
 =======
+=======
+>>>>>>> epics
     await seed_assessment_sessions(user_ids, course_ids)  # ✅ Pass course_ids
     await seed_conversations(user_ids, course_ids)
     await seed_classes(user_ids, course_ids)
@@ -2026,7 +2118,13 @@ async def main():
                 print()
 
 
+<<<<<<< HEAD
 >>>>>>> origin/tasks/uploadImg
 
 if __name__ == "__main__":
     asyncio.run(main())
+=======
+
+if __name__ == "__main__":
+    asyncio.run(main())
+>>>>>>> epics

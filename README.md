@@ -22,4 +22,8 @@ QUICKSTART.md
 
 tk test 
 admin.super@ailab.com.vn
+<<<<<<< HEAD
 Admin@12345
+=======
+Admin@12345
+>>>>>>> epics

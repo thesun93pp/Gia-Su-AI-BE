@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from fastapi import HTTPException, status
 from pymongo import ASCENDING, DESCENDING
+from beanie.odm.operators.find.logical import And, Or
 from models.models import User, Course, Class, Enrollment, Progress
 from utils.security import hash_password, generate_random_password
 
@@ -23,7 +24,9 @@ async def get_users_list_admin(
     role_filter: Optional[str] = None,
     status_filter: Optional[str] = None,
     sort_by: str = "created_at",
-    sort_order: str = "desc"
+    sort_order: str = "desc",
+    created_from: Optional[str] = None,
+    created_to: Optional[str] = None
 ) -> Dict:
     """
     Lấy danh sách users với pagination và filters cho admin
@@ -42,6 +45,8 @@ async def get_users_list_admin(
         status_filter: Lọc theo status
         sort_by: Field để sort (default created_at)
         sort_order: asc/desc (default desc)
+        created_from: Lọc từ ngày tạo (ISO 8601)
+        created_to: Lọc đến ngày tạo (ISO 8601)
         
     Returns:
         Dict chứa users list và pagination info
@@ -56,25 +61,24 @@ async def get_users_list_admin(
     # Apply status filter 
     if status_filter:
         query_conditions.append(User.status == status_filter)
+        
+    # Apply date range filter
+    if created_from:
+        query_conditions.append(User.created_at >= datetime.fromisoformat(created_from))
+    if created_to:
+        query_conditions.append(User.created_at <= datetime.fromisoformat(created_to))
     
     # Apply search
     if search:
-        search_conditions = [
+        search_query = Or(
             User.full_name.contains(search, case_insensitive=True),
             User.email.contains(search, case_insensitive=True)
-        ]
-        # Build search query using Beanie
-        search_query = search_conditions[0]
-        for condition in search_conditions[1:]:
-            search_query |= condition
+        )
         query_conditions.append(search_query)
-    
+
     # Build final query
     if query_conditions:
-        combined_query = query_conditions[0]
-        for condition in query_conditions[1:]:
-            combined_query &= condition
-        query = User.find(combined_query)
+        query = User.find(And(*query_conditions))
     else:
         query = User.find()
     
@@ -141,14 +145,14 @@ async def get_user_detail_admin(user_id: str) -> Dict:
     
     Business Logic:
     1. Validate user existence
-    2. Lấy additional stats: enrollments, courses created, activity
-    3. Lấy recent activity logs
+    2. Calculate activity summary: courses_enrolled, classes_created, etc
+    3. Return profile and activity data
     
     Args:
         user_id: ID của user
         
     Returns:
-        Dict chứa detailed user info
+        Dict chứa detailed user info matching AdminUserDetailResponse schema
         
     Raises:
         404: User không tồn tại
@@ -161,79 +165,32 @@ async def get_user_detail_admin(user_id: str) -> Dict:
             detail="User không tồn tại"
         )
     
-    # Get enrollments if student
-    enrollments_data = []
+    # Calculate activity summary based on role
+    courses_enrolled = 0
+    classes_created = 0
+    total_study_hours = 0
+    login_streak_days = 0
+    
     if user.role == "student":
-        enrollments = await Enrollment.find(
+        # Count enrollments for students
+        courses_enrolled = await Enrollment.find(
             Enrollment.user_id == user.id
-        ).sort(-Enrollment.created_at).to_list()
+        ).count()
         
-        for enrollment in enrollments:
-            course = await Course.get(enrollment.course_id)
-            if course:
-                enrollments_data.append({
-                    "enrollment_id": str(enrollment.id),
-                    "course_id": str(course.id),
-                    "course_title": course.title,
-                    "status": enrollment.status,
-                    "progress": enrollment.progress,
-                    "enrolled_at": enrollment.created_at.isoformat(),
-                    "completed_at": enrollment.completed_at.isoformat() if enrollment.completed_at else None
-                })
-    
-    # Get courses if instructor
-    courses_data = []
-    if user.role == "instructor":
-        courses = await Course.find(
-            Course.instructor_id == user.id
-        ).sort(-Course.created_at).to_list()
+        # Calculate total study hours from progress
+        progresses = await Progress.find(
+            Progress.user_id == user.id
+        ).to_list()
         
-        for course in courses:
-            enrollment_count = await Enrollment.find(
-                Enrollment.course_id == course.id
-            ).count()
-            
-            courses_data.append({
-                "course_id": str(course.id),
-                "title": course.title,
-                "status": course.status,
-                "category": course.category,
-                "enrollment_count": enrollment_count,
-                "created_at": course.created_at.isoformat()
-            })
-    
-    # Activity stats (last 30 days)
-    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
-    
-    # Get recent activity based on role
-    recent_activity = []
-    if user.role == "student":
-        recent_enrollments = await Enrollment.find(
-            Enrollment.user_id == user.id,
-            Enrollment.created_at >= thirty_days_ago
-        ).sort(-Enrollment.created_at).limit(5).to_list()
-        
-        for enrollment in recent_enrollments:
-            course = await Course.get(enrollment.course_id)
-            if course:
-                recent_activity.append({
-                    "type": "enrollment",
-                    "description": f"Đăng ký khóa học: {course.title}",
-                    "timestamp": enrollment.created_at.isoformat()
-                })
+        total_study_hours = sum(
+            getattr(p, 'total_minutes', 0) // 60 for p in progresses
+        )
     
     elif user.role == "instructor":
-        recent_courses = await Course.find(
-            Course.instructor_id == user.id,
-            Course.created_at >= thirty_days_ago
-        ).sort(-Course.created_at).limit(5).to_list()
-        
-        for course in recent_courses:
-            recent_activity.append({
-                "type": "course_creation",
-                "description": f"Tạo khóa học: {course.title}",
-                "timestamp": course.created_at.isoformat()
-            })
+        # Count courses created by instructor
+        classes_created = await Course.find(
+            Course.instructor_id == user.id
+        ).count()
     
     return {
         "user_id": str(user.id),
@@ -243,27 +200,17 @@ async def get_user_detail_admin(user_id: str) -> Dict:
         "status": user.status,
         "created_at": user.created_at.isoformat(),
         "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
-        # "profile": {
-        #     "phone": user.phone,
-        #     "bio": user.bio,
-        #     "avatar_url": user.avatar_url
-            
-        # },
-        "profile": {            
-            "bio": user.bio,
-            "avatar_url": user.avatar_url
-            
+        "profile": {
+            "phone": getattr(user, 'phone', None),
+            "bio": getattr(user.profile, 'bio', None) if getattr(user, 'profile', None) else None,
+            "avatar_url": getattr(user.profile, 'avatar_url', None) if getattr(user, 'profile', None) else None
         },
-        "enrollments": enrollments_data if user.role == "student" else None,
-        "courses": courses_data if user.role == "instructor" else None,
-        "recent_activity": recent_activity,
-        "statistics": {
-            "total_enrollments": len(enrollments_data) if user.role == "student" else None,
-            "total_courses_created": len(courses_data) if user.role == "instructor" else None,
-            "activity_last_30d": len(recent_activity)
-        },
-        
-        
+        "activity_summary": {
+            "courses_enrolled": courses_enrolled,
+            "classes_created": classes_created,
+            "total_study_hours": total_study_hours,
+            "login_streak_days": login_streak_days
+        }
     }
 
 
@@ -321,7 +268,7 @@ async def create_user_admin(user_data: Dict) -> Dict:
             "full_name": user.full_name,
             "role": user.role,
             "status": user.status,
-            "generated_password": hash_password if not user_data.get("password") else None,
+            "generated_password": user_data.get("password") if not user_data.get("password") else None,
             "created_at": user.created_at.isoformat(),
             "message": f"Tài khoản {user.full_name} đã được tạo thành công" 
         }
@@ -381,7 +328,7 @@ async def update_user_admin(user_id: str, update_data: Dict) -> Dict:
     
     # Hash new password if provided
     if "password" in update_data:
-        user.password = hash_password(update_data["password"])
+        user.hashed_password = hash_password(update_data["password"])
     
     user.updated_at = datetime.utcnow()
     
@@ -390,10 +337,10 @@ async def update_user_admin(user_id: str, update_data: Dict) -> Dict:
         
         return {
             "user_id": str(user.id),
-            # "email": user.email,
-            # "full_name": user.full_name,
-            # "role": user.role,
-            # "status": user.status,
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role,
+            "status": user.status,
             "message": f"Thông tin tài khoản đã được cập nhật thành công",
             "updated_at": user.updated_at.isoformat(),
             
@@ -478,11 +425,11 @@ async def delete_user_admin(user_id: str) -> Dict:
     user.updated_at = datetime.utcnow()
     
     try:
-        await user.delete()
+        await user.save()
         
         return {
             "user_id": str(user.id),
-            "message": "Tài khoản đã được xóa vĩnh viễn",
+            "message": "Tài khoản đã được xóa mềm (soft delete)",
             "deleted_at": user.updated_at.isoformat()
         }
     except Exception as e:
@@ -495,143 +442,6 @@ async def delete_user_admin(user_id: str) -> Dict:
 # ============================================================================
 # Section 4.2: ADMIN COURSE MANAGEMENT
 # ============================================================================
-
-async def get_courses_list_admin(
-    page: int = 1,
-    limit: int = 20,
-    search: Optional[str] = None,
-    category_filter: Optional[str] = None,
-    status_filter: Optional[str] = None,
-    instructor_filter: Optional[str] = None,
-    sort_by: str = "created_at",
-    sort_order: str = "desc"
-) -> Dict:
-    """
-    Lấy danh sách courses với filters cho admin
-    
-    Business Logic:
-    1. Build query với filters
-    2. Include instructor info và enrollment stats
-    3. Apply pagination
-    4. Return formatted course data
-    
-    Args:
-        page: Trang hiện tại
-        limit: Số items per page
-        search: Search query
-        category_filter: Lọc theo category
-        status_filter: Lọc theo status
-        instructor_filter: Lọc theo instructor
-        sort_by: Field để sort
-        sort_order: asc/desc
-        
-    Returns:
-        Dict chứa courses list và pagination
-    """
-    # Build query conditions
-    query_conditions = []
-    
-    # Apply filters
-    if category_filter:
-        query_conditions.append(Course.category == category_filter)
-    
-    if status_filter:
-        query_conditions.append(Course.status == status_filter)
-    
-    if instructor_filter:
-        query_conditions.append(Course.instructor_id == instructor_filter)
-    
-    # Apply search
-    if search:
-        search_conditions = [
-            Course.title.contains(search, case_insensitive=True),
-            Course.description.contains(search, case_insensitive=True)
-        ]
-        search_query = search_conditions[0]
-        for condition in search_conditions[1:]:
-            search_query |= condition
-        query_conditions.append(search_query)
-    
-    # Build final query
-    if query_conditions:
-        combined_query = query_conditions[0]
-        for condition in query_conditions[1:]:
-            combined_query &= condition
-        query = Course.find(combined_query)
-    else:
-        query = Course.find()
-    
-    # Get total count
-    total_count = await query.count()
-    
-    # Apply sorting
-    sort_field = getattr(Course, sort_by, Course.created_at)
-    if sort_order == "desc":
-        query = query.sort(-sort_field)
-    else:
-        query = query.sort(sort_field)
-    
-    # Apply pagination
-    skip = (page - 1) * limit
-    courses = await query.skip(skip).limit(limit).to_list()
-    
-    # Format course data
-    courses_data = []
-    for course in courses:
-        # Get instructor info
-        instructor = await User.get(course.instructor_id)
-        instructor_name = instructor.full_name if instructor else "Unknown"
-        
-        # Get enrollment stats
-        enrollment_count = await Enrollment.find(
-            Enrollment.course_id == course.id
-        ).count()
-        
-        completed_count = await Enrollment.find(
-            Enrollment.course_id == course.id,
-            Enrollment.status == "completed"
-        ).count()
-        
-        completion_rate = (completed_count / enrollment_count * 100) if enrollment_count > 0 else 0
-        
-        courses_data.append({
-            "course_id": str(course.id),
-            "title": course.title,
-            "description": course.description[:200] + "..." if len(course.description) > 200 else course.description,
-            "category": course.category,
-            "status": course.status,
-            "instructor_id": str(course.instructor_id),
-            "instructor_name": instructor_name,
-            "created_at": course.created_at.isoformat(),
-            "updated_at": course.updated_at.isoformat(),
-            "enrollment_count": enrollment_count,
-            "completed_count": completed_count,
-            "completion_rate": round(completion_rate, 2)
-        })
-    
-    # Calculate pagination
-    total_pages = (total_count + limit - 1) // limit
-    
-    return {
-        "courses": courses_data,
-        "pagination": {
-            "current_page": page,
-            "total_pages": total_pages,
-            "total_items": total_count,
-            "items_per_page": limit,
-            "has_next": page < total_pages,
-            "has_prev": page > 1
-        },
-        "filters": {
-            "search": search,
-            "category_filter": category_filter,
-            "status_filter": status_filter,
-            "instructor_filter": instructor_filter,
-            "sort_by": sort_by,
-            "sort_order": sort_order
-        }
-    }
-
 
 async def update_course_status_admin(course_id: str, new_status: str, admin_id: str) -> Dict:
     """
@@ -700,6 +510,118 @@ async def update_course_status_admin(course_id: str, new_status: str, admin_id: 
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi khi cập nhật course status: {str(e)}"
         )
+
+
+async def get_courses_list_admin(
+    status: Optional[str] = None,
+    creator_id: Optional[str] = None,
+    category: Optional[str] = None,
+    sort_by: str = "created_at",
+    order: str = "desc",
+    skip: int = 0,
+    limit: int = 20
+) -> Dict:
+    """
+    Lấy danh sách khóa học với filters và pagination
+    
+    Business Logic:
+    1. Build query conditions từ filters
+    2. Apply sorting
+    3. Get total count
+    4. Apply pagination
+    5. Format response data
+    
+    Args:
+        status: Filter by status (active|draft|archived)
+        creator_id: Filter by instructor_id
+        category: Filter by category
+        sort_by: Sort field (created_at|enrollment_count|title)
+        order: Sort order (asc|desc)
+        skip: Pagination offset
+        limit: Pagination limit
+        
+    Returns:
+        Dict với keys: data, total, skip, limit
+    """
+    try:
+        # ✅ Build query conditions
+        query_conditions = []
+        
+        if status:
+            query_conditions.append(Course.status == status)
+        
+        if creator_id:
+            query_conditions.append(Course.instructor_id == creator_id)
+        
+        if category:
+            query_conditions.append(Course.category == category)
+        
+        # ✅ Build final query
+        if query_conditions:
+            query = Course.find(And(*query_conditions))
+        else:
+            query = Course.find()
+        
+        # ✅ Get total count BEFORE pagination
+        total = await query.count()
+        
+        # ✅ Apply sorting
+        sort_field = getattr(Course, sort_by, Course.created_at)
+        if order == "desc":
+            query = query.sort(-(sort_field))
+        else:
+            query = query.sort(sort_field)
+        
+        # ✅ Apply pagination
+        courses = await query.skip(skip).limit(limit).to_list()
+        
+        # ✅ Format response data
+        courses_data = []
+        for course in courses:
+            try:
+                # Get instructor name
+                instructor = None
+                if hasattr(course, 'instructor_id') and course.instructor_id:
+                    try:
+                        instructor = await User.get(course.instructor_id)
+                    except:
+                        instructor = None
+                
+                creator_name = instructor.full_name if instructor else "Unknown"
+                
+                # Get enrollment count
+                enrollment_count = 0
+                if hasattr(course, 'enrollments'):
+                    enrollment_count = len(course.enrollments) if course.enrollments else 0
+                
+                courses_data.append({
+                    "course_id": str(course.id),
+                    "title": course.title or "Untitled",
+                    "creator_name": creator_name,
+                    "category": course.category or "Uncategorized",
+                    "level": course.level or "Beginner",
+                    "status": course.status or "draft",
+                    "enrollment_count": enrollment_count,
+                    "created_at": course.created_at,
+                    "last_updated": course.updated_at
+                })
+            except Exception as item_error:
+                print(f"⚠️ Error processing course {course.id}: {str(item_error)}")
+                continue
+        
+        # ✅ Return complete response
+        return {
+            'data': courses_data,
+            'total': total,
+            'skip': skip,
+            'limit': limit
+        }
+        
+    except Exception as e:
+        print(f"❌ Error in get_courses_list_admin: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 
 # ============================================================================
@@ -844,9 +766,9 @@ async def get_class_detail_admin(class_id: str) -> Dict:
     # Get course info - match API_SCHEMA Section 9.14
     course = await Course.get(class_obj.course_id)
     course_info = {
-        "course_id": str(course.id),
-        "title": course.title,
-        "category": course.category
+        "course_id": str(course.id) if course else None,
+        "title": course.title if course else "Unknown Course",
+        "category": course.category if course else None
     } if course else None
     
     # Calculate class statistics for all students
@@ -998,7 +920,7 @@ async def reset_user_password_admin(user_id: str, new_password: str) -> Dict:
         )
     
     # Hash new password
-    user.password = hash_password(new_password)
+    user.hashed_password = hash_password(new_password)
     user.updated_at = datetime.utcnow()
     
     try:
@@ -1016,7 +938,18 @@ async def reset_user_password_admin(user_id: str, new_password: str) -> Dict:
         )
 
 
-async def create_course_admin(course_data: Dict) -> Dict:
+async def create_course_admin(
+    admin_id: str,
+    title: str,
+    description: str,
+    category: str,
+    level: str,
+    thumbnail_url: Optional[str] = None,
+    preview_video_url: Optional[str] = None,
+    prerequisites: Optional[List[str]] = None,
+    learning_outcomes: Optional[List[Dict]] = None,
+    status: str = "draft"
+) -> Dict:
     """
     Tạo khóa học chính thức (Section 4.2.3)
     
@@ -1028,12 +961,16 @@ async def create_course_admin(course_data: Dict) -> Dict:
     """
     # Create course
     course = Course(
-        title=course_data["title"],
-        description=course_data["description"],
-        instructor_id=course_data.get("creator_id", course_data.get("instructor_id")),
-        category=course_data["category"],
-        level=course_data["level"],
-        status=course_data.get("status", "draft"),
+        title=title,
+        description=description,
+        instructor_id=admin_id,
+        category=category,
+        level=level,
+        status=status,
+        thumbnail_url=thumbnail_url,
+        preview_video_url=preview_video_url,
+        prerequisites=prerequisites,
+        learning_outcomes=learning_outcomes,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow()
     )
@@ -1080,7 +1017,11 @@ async def update_course_admin(course_id: str, update_data: Dict) -> Dict:
         )
     
     # Update allowed fields
-    allowed_fields = ["title", "description", "category", "level", "status"]
+    allowed_fields = [
+        "title", "description", "category", "level", "status",
+        "language", "thumbnail_url", "preview_video_url",
+        "prerequisites", "learning_outcomes"
+    ]
     
     for field, value in update_data.items():
         if field in allowed_fields:
@@ -1093,6 +1034,8 @@ async def update_course_admin(course_id: str, update_data: Dict) -> Dict:
         
         return {
             "course_id": str(course.id),
+            "title": course.title,
+            "status": course.status,
             "message": "Khóa học đã được cập nhật",
             "updated_at": course.updated_at.isoformat()
         }
@@ -1123,8 +1066,7 @@ async def delete_course_admin(course_id: str) -> Dict:
     
     # Check for active enrollments
     active_enrollments = await Enrollment.find(
-        Enrollment.course_id == course_id,
-        Enrollment.status.in_(["active", "completed"])
+        Enrollment.course_id == course_id
     ).count()
     
     if active_enrollments > 0:
@@ -1155,3 +1097,139 @@ async def delete_course_admin(course_id: str) -> Dict:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi khi xóa khóa học: {str(e)}"
         )
+
+
+async def handle_create_lesson_admin(
+    course_id: str,
+    module_id: str,
+    lesson_data: Dict
+) -> Dict:
+    """
+    Tạo lesson mới trong module (Admin - Section 4.2.6)
+    
+    Business Logic:
+    1. Validate course exists
+    2. Validate module exists in course
+    3. Create lesson with proper validation
+    4. Update course/module metadata
+    5. Return lesson details with IDs
+    
+    Args:
+        course_id: ID của course
+        module_id: ID của module
+        lesson_data: Dict chứa lesson info (title, order, content, etc)
+        
+    Returns:
+        Dict chứa lesson_id, title, order, status, và các thông tin khác
+        
+    Raises:
+        404: Course hoặc module không tồn tại
+        400: Validation error
+        500: Server error
+    """
+    from services.course_service import add_lesson_to_module
+    
+    try:
+        # Validate course exists
+        course = await Course.get(course_id)
+        if not course:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Khóa học không tồn tại"
+            )
+        
+        # Validate module exists in course
+        module_found = None
+        if hasattr(course, 'modules') and course.modules:
+            for module in course.modules:
+                if str(module.id) == module_id:
+                    module_found = module
+                    break
+        
+        if not module_found:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Module không tồn tại trong khóa học này"
+            )
+        
+        # Validate required fields
+        required_fields = ['title', 'order']
+        for field in required_fields:
+            if field not in lesson_data or not lesson_data[field]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Field '{field}' là bắt buộc"
+                )
+        
+        # Create lesson (handle both simple and complex lesson_data)
+        class SimpleLessonData:
+            """Helper class để convert dict to object"""
+            def __init__(self, data):
+                self.title = data.get('title')
+                self.order = data.get('order')
+                self.content = data.get('content', '')
+                self.content_type = data.get('content_type', 'text')
+                self.duration_minutes = data.get('duration_minutes', 0)
+                self.video_url = data.get('video_url')
+                self.audio_url = data.get('audio_url')
+                self.resource = data.get('resource', [])
+                self.learning_objectives = data.get('learning_objectives', [])
+                self.simulation_html = data.get('simulation_html')
+                self.quiz_id = data.get('quiz_id')
+                self.is_published = data.get('is_published', False)
+                self.description = data.get('description', '')
+            
+            def dict(self):
+                return {
+                    'title': self.title,
+                    'order': self.order,
+                    'content': self.content,
+                    'content_type': self.content_type,
+                    'duration_minutes': self.duration_minutes,
+                    'video_url': self.video_url,
+                    'audio_url': self.audio_url,
+                    'resources': self.resource if isinstance(self.resource, list) else [],
+                    'learning_objectives': self.learning_objectives,
+                    'simulation_html': self.simulation_html,
+                    'quiz_id': self.quiz_id,
+                    'is_published': self.is_published,
+                    'description': self.description
+                }
+        
+        # Convert lesson_data to object format
+        lesson_obj = SimpleLessonData(lesson_data)
+        
+        # Call course_service to add lesson
+        result = await add_lesson_to_module(
+            course_id=course_id,
+            module_id=module_id,
+            lesson_data=lesson_obj
+        )
+        
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Lỗi khi tạo lesson"
+            )
+        
+        return {
+            "lesson_id": result.get('id'),
+            "title": result.get('title'),
+            "order": result.get('order'),
+            "content_type": result.get('content_type'),
+            "duration_minutes": result.get('duration_minutes'),
+            "is_published": result.get('is_published', False),
+            "status": "created",
+            "message": "Lesson đã được tạo thành công",
+            "course_id": course_id,
+            "module_id": module_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi khi tạo lesson: {str(e)}"
+        )
+

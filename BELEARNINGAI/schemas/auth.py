@@ -6,6 +6,14 @@ Authentication Schemas
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime
 from typing import Optional
+import re
+
+# --- Constants ---
+# Regex pattern cho phép:
+# a-zA-Z: Chữ cái tiếng Anh
+# \s: Khoảng trắng
+# \u00C0-\u1EF9: Phạm vi Unicode bao gồm các ký tự có dấu (Tiếng Việt, Pháp, v.v...)
+NAME_REGEX = r"^[a-zA-Z\s\u00C0-\u1EF9]+$"
 
 class RegisterRequest(BaseModel):
     """Schema cho đăng ký tài khoản mới - POST /api/v1/auth/register"""
@@ -28,11 +36,23 @@ class RegisterRequest(BaseModel):
     @field_validator('full_name')
     @classmethod
     def validate_full_name(cls, v: str) -> str:
-        """Validate full name có ít nhất 2 từ"""
-        words = v.strip().split()
+        """Validate full name: ít nhất 2 từ, chỉ chứa chữ và dấu cách"""
+        if not v or not isinstance(v, str):
+            raise ValueError('Tên đầy đủ không hợp lệ')
+        
+        clean_name = v.strip()
+        
+        # 1. Check số lượng từ
+        words = clean_name.split()
         if len(words) < 2:
-            raise ValueError('Full name must have at least 2 words')
-        return v.strip()
+            raise ValueError('Tên đầy đủ phải có ít nhất 2 từ')
+        
+        # 2. Check ký tự hợp lệ bằng Regex (Yêu cầu mới)
+        if not re.match(NAME_REGEX, clean_name):
+            raise ValueError('Tên chỉ được phép chứa chữ cái và khoảng trắng (không được chứa số hoặc ký tự đặc biệt)')
+        
+        # Tự động viết hoa chữ cái đầu mỗi từ (Title Case) cho đẹp
+        return clean_name.title()
     
     @field_validator('password')
     @classmethod

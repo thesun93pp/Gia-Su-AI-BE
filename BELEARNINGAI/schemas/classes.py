@@ -20,9 +20,9 @@ class ClassCreateRequest(BaseModel):
 class ClassCreateResponse(BaseModel):
     class_id: str = Field(..., description="UUID")
     name: str
-    course_id: str = Field(..., description="UUID")
     invite_code: str = Field(..., description="6-8 characters")
-    status: str = Field(..., description="preparing")
+    course_title: str
+    student_count: int = Field(..., description="Số học viên hiện tại")
     created_at: datetime
     message: str
 
@@ -84,6 +84,7 @@ class ClassUpdateRequest(BaseModel):
     description: Optional[str] = None
     max_students: Optional[int] = None
     end_date: Optional[datetime] = None
+    status: Optional[str] = None
 
 
 class ClassUpdateResponse(BaseModel):

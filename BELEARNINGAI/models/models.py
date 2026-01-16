@@ -51,6 +51,7 @@ class EmbeddedLesson(BaseModel):
     audio_url: Optional[str] = None  # URL audio file (mp3, wav, ogg)
     resources: List[dict] = Field(default_factory=list)
     learning_objectives: List[str] = Field(default_factory=list, description="Mục tiêu học tập của lesson")
+    simulation_html: Optional[str] = None
     quiz_id: Optional[str] = None
     is_published: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -63,7 +64,7 @@ class EmbeddedModule(BaseModel):
     title: str
     description: str
     order: int
-    difficulty: str = "Basic"
+    difficulty: str = "easy"
     estimated_hours: float = 0
     learning_outcomes: List[dict] = Field(default_factory=list)
     prerequisites: List[str] = Field(default_factory=list, description="Module IDs tiên quyết")
@@ -222,11 +223,13 @@ class Module(Document):
     title: str = Field(..., description="Tên module")
     description: str = Field(..., description="Mô tả module")
     order: int = Field(..., description="Thứ tự module trong khóa học")
-    difficulty: str = Field(default="Basic", description="Độ khó: Basic|Intermediate|Advanced")
+    difficulty: str = Field(default="easy", description="Độ khó: easy|medium|hard")
     estimated_hours: float = Field(default=0, description="Thời gian học ước tính (giờ)")
     
     # Learning outcomes cho module - theo LearningOutcome schema
     learning_outcomes: List[dict] = Field(default_factory=list, description="Mục tiêu học tập của module")
+    prerequisites: List[str] = Field(default_factory=list, description="Module IDs tiên quyết")
+    resources: List[dict] = Field(default_factory=list, description="Tài liệu module-level")
     # Learning outcome structure từ learning.py LearningOutcome: {
     #   "id": "uuid",
     #   "outcome": "Mô tả mục tiêu cụ thể",
@@ -341,6 +344,12 @@ class Enrollment(Document):
     completed_modules: List[str] = Field(default_factory=list, description="Danh sách UUID modules đã hoàn thành")
     avg_quiz_score: Optional[float] = Field(None, description="Điểm quiz trung bình 0-100")
     total_time_spent_minutes: int = Field(default=0, description="Tổng thời gian học (phút)")
+
+    # Module Assessment Review - Lessons cần xem lại sau khi fail module assessment
+    lessons_need_review: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Lessons cần xem lại sau module assessment. Format: [{lesson_id, lesson_title, module_id, skill_gaps, wrong_questions, marked_at, reviewed, reviewed_at}]"
+    )
     
     # Timestamps
     enrolled_at: datetime = Field(default_factory=datetime.utcnow, description="Thời gian đăng ký")

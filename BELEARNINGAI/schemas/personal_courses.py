@@ -82,7 +82,8 @@ class CourseFromPromptResponse(BaseModel):
     level: str
     status: str = Field(default="draft", description="Trạng thái: draft")
     owner_id: str = Field(..., description="UUID người tạo")
-    owner_type: str = Field(default="student", description="Loại người tạo")    
+    owner_type: str = Field(default="student", description="Loại người tạo")
+    
     modules: List[GeneratedModule] = Field(
         default_factory=list,
         description="Danh sách modules đã được AI sinh"

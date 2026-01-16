@@ -201,7 +201,7 @@ async def handle_update_personal_course(
                 "title": module["title"],
                 "description": module["description"],
                 "order": module["order"],
-                "difficulty": module.get("difficulty", "Basic"),
+                "difficulty": module.get("difficulty", "easy"),
                 "estimated_hours": module.get("estimated_hours", 0),
                 "learning_outcomes": module.get("learning_outcomes", []),
                 "lessons": []
