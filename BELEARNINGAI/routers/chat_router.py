@@ -31,10 +31,6 @@ router = APIRouter(prefix="/chat", tags=["Chat AI"])
     "/course/{course_id}",
     response_model=ChatMessageResponse,
     status_code=status.HTTP_201_CREATED,
-<<<<<<< HEAD
-    summary="Gửi câu hỏi cho AI chatbot",
-    description="Chatbot trả lời dựa trên nội dung khóa học (RAG), kèm nguồn lesson liên quan"
-=======
     summary="Gửi câu hỏi cho AI chatbot (hỗ trợ text + image)",
     description="""
     **Chatbot AI hỗ trợ multimodal (text + image)**
@@ -70,23 +66,18 @@ router = APIRouter(prefix="/chat", tags=["Chat AI"])
     - `has_image`: Message có kèm ảnh không
     - `image_analyzed`: AI đã phân tích ảnh chưa
     """
->>>>>>> origin/epics
 )
 async def send_chat_message(
     course_id: str,
     message_data: ChatMessageRequest,
     current_user: dict = Depends(get_current_user)
 ):
-<<<<<<< HEAD
-    """Section 2.6.1 - Gửi tin nhắn chat"""
-=======
     """
     Section 2.6.1 - Gửi tin nhắn chat (text + image)
 
     Hỗ trợ multimodal: Học viên có thể gửi câu hỏi kèm ảnh,
     AI sẽ phân tích cả text và image để trả lời.
     """
->>>>>>> origin/epics
     return await handle_send_chat_message(course_id, message_data, current_user)
 
 

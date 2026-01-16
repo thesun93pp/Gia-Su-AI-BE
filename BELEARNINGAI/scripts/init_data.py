@@ -217,11 +217,7 @@ Khóa học bao gồm:
 - ✅ Hỗ trợ 1-1 với instructor
 
 Phù hợp cho: Người mới bắt đầu lập trình, sinh viên IT, developer muốn học Python
-<<<<<<< HEAD
-        """.strip(),
-=======
         """,
->>>>>>> origin/epics
         category="Programming",
         level="Beginner",
         thumbnail_url="https://images.unsplash.com/photo-1526379095098-d400fd0bf935?w=800&h=450",
@@ -700,11 +696,7 @@ for row in matrix:
                 "code_snippets": [
                     {
                         "language": "python",
-<<<<<<< HEAD
-                        "code": f"# Code example for {lesson_info['title']}\\nprint('Hello from lesson {lesson_order} module {module_order}')",
-=======
                         "code": f"# Code example for {lesson_info['title']}\nprint('Hello from lesson {lesson_order} module {module_order}')",
->>>>>>> origin/epics
                         "description": f"Example code for {lesson_info['title']}"
                     }
                 ]
@@ -1057,10 +1049,6 @@ async def seed_progress(enrollment_ids: List[str]):
     
     print(f"✅ Đã tạo thành công {len(progress_to_create)} bản ghi tiến độ học tập.")
 
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/epics
 async def seed_assessment_sessions(user_ids: Dict[str, List[str]], course_ids: Dict[str, str]):
     """
     Tạo dữ liệu mẫu cho các phiên đánh giá năng lực (AssessmentSession).
@@ -1630,8 +1618,4 @@ async def main():
 
 
 if __name__ == "__main__":
-<<<<<<< HEAD
     asyncio.run(main())
-=======
-    asyncio.run(main())
->>>>>>> origin/epics

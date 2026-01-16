@@ -5,11 +5,7 @@ Admin Schemas
 
 from pydantic import BaseModel, Field
 from datetime import datetime
-<<<<<<< HEAD
-from typing import List, Optional
-=======
 from typing import List, Optional, Literal
->>>>>>> origin/epics
 
 
 class AdminUserListItem(BaseModel):
@@ -30,10 +26,6 @@ class UserSummary(BaseModel):
     active_users: int
     new_users_this_month: int
 
-<<<<<<< HEAD
-
-=======
->>>>>>> origin/epics
 class AdminUserListResponse(BaseModel):
     summary: Optional[str] = None
     data: List[AdminUserListItem]
@@ -102,9 +94,6 @@ class AdminCreateUserRequest(BaseModel):
     bio: Optional[str] = Field(None, max_length=500)
     avatar: Optional[str] = None
 
-<<<<<<< HEAD
-
-=======
 class AdminCreateLessonResponse(BaseModel):
     course_id: str = Field(..., description="UUID")
     module_id: str = Field(..., description="UUID")
@@ -123,7 +112,6 @@ class AdminCreateLessonResponse(BaseModel):
     is_published: bool = Field(..., description="Bài học đã được xuất bản hay chưa")
     message: str = Field(..., description="Thông báo tạo thành công")
     
->>>>>>> origin/epics
 class AdminCreateUserResponse(BaseModel):
     user_id: str = Field(..., description="UUID")
     full_name: str
@@ -209,8 +197,6 @@ class AdminDashboardResponse(BaseModel):
 # ADMIN COURSE MANAGEMENT SCHEMAS (Section 4.2)
 # ============================================================================
 
-<<<<<<< HEAD
-=======
 class LearningOutcome(BaseModel):
     description: str = Field(..., description="Mô tả kết quả học tập đạt được")
     skill_tag: str = Field(..., description="Skill tag dùng cho đánh giá & lộ trình")
@@ -266,7 +252,6 @@ class AdminResourceCreate(BaseModel):
     is_dowloadable: bool = Field(..., description="Có thể tải về hay không")
 
 
->>>>>>> origin/epics
 class CourseAuthor(BaseModel):
     user_id: str = Field(..., description="UUID")
     full_name: str
@@ -326,11 +311,7 @@ class AdminCourseDetailResponse(BaseModel):
     modules: List[ModuleSummary]
     total_duration_minutes: int
     prerequisites: List[str]
-<<<<<<< HEAD
-    learning_outcomes: List[dict]
-=======
     learning_outcomes: List[LearningOutcome]
->>>>>>> origin/epics
     analytics: CourseAnalytics
     created_at: datetime
     updated_at: datetime
@@ -338,17 +319,6 @@ class AdminCourseDetailResponse(BaseModel):
 
 class AdminCourseCreateRequest(BaseModel):
     title: str = Field(..., min_length=5, max_length=200)
-<<<<<<< HEAD
-    description: str = Field(..., min_length=20, max_length=2000)
-    category: str
-    level: str = Field(..., description="Beginner|Intermediate|Advanced")
-    language: str = Field(default="vi")
-    thumbnail_url: Optional[str] = None
-    preview_video_url: Optional[str] = None
-    prerequisites: List[str] = Field(default_factory=list)
-    learning_outcomes: List[dict] = Field(default_factory=list)
-    status: str = Field(default="draft", description="draft|published")
-=======
     description: str = Field(..., min_length=5, max_length=2000)
     category: str
     level: str = Field(..., description="Beginner|Intermediate|Advanced")
@@ -361,7 +331,6 @@ class AdminCourseCreateRequest(BaseModel):
     
     
     
->>>>>>> origin/epics
 
 
 class AdminCourseCreateResponse(BaseModel):
@@ -372,11 +341,7 @@ class AdminCourseCreateResponse(BaseModel):
     created_by: str = Field(..., description="Admin user_id")
     created_at: datetime
     message: str
-<<<<<<< HEAD
-
-=======
    
->>>>>>> origin/epics
 
 class AdminCourseUpdateRequest(BaseModel):
     title: Optional[str] = Field(None, min_length=5, max_length=200)
@@ -387,15 +352,9 @@ class AdminCourseUpdateRequest(BaseModel):
     thumbnail_url: Optional[str] = None
     preview_video_url: Optional[str] = None
     prerequisites: Optional[List[str]] = None
-<<<<<<< HEAD
-    learning_outcomes: Optional[List[dict]] = None
-    status: Optional[str] = Field(None, description="draft|published|archived")
-
-=======
     learning_outcomes: List[LearningOutcome] = Field(default_factory=list)
     status: Optional[str] = Field(None, description="draft|published|archived")
    
->>>>>>> origin/epics
 
 class AdminCourseUpdateResponse(BaseModel):
     course_id: str = Field(..., description="UUID")
@@ -476,8 +435,5 @@ class AdminClassDetailResponse(BaseModel):
     created_at: datetime = Field(..., description="Ngày tạo lớp")
     start_date: datetime = Field(..., description="Thời gian bắt đầu")
     end_date: datetime = Field(..., description="Thời gian kết thúc")
-<<<<<<< HEAD
-=======
 
 
->>>>>>> origin/epics

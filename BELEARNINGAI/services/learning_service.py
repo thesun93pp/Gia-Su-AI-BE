@@ -94,11 +94,7 @@ async def get_module_detail(
         "id": str(module.id),
         "title": module.title,
         "description": getattr(module, 'description', '') or '',
-<<<<<<< HEAD
-        "difficulty": getattr(module, 'difficulty', 'Basic'),
-=======
         "difficulty": getattr(module, 'difficulty', 'easy'),
->>>>>>> origin/epics
         "order": module.order,
         "lessons": [],
         "learning_outcomes": transformed_outcomes,
@@ -402,10 +398,7 @@ async def get_lesson_content(
         "content_type": getattr(lesson, 'content_type', 'text'),
         "text_content": getattr(lesson, 'content', ''),
         "video_info": video_info,
-<<<<<<< HEAD
-=======
         "simulation_html": getattr(lesson, 'simulation_html', None),
->>>>>>> origin/epics
         "attachments": attachments,
         "learning_objectives": learning_objectives,
         "resources": resources,
@@ -506,11 +499,7 @@ async def get_course_modules_list(
             "id": str(module.id),
             "title": module.title,
             "description": getattr(module, 'description', ''),
-<<<<<<< HEAD
-            "difficulty": getattr(module, 'difficulty', 'Basic'),
-=======
             "difficulty": getattr(module, 'difficulty', 'easy'),
->>>>>>> origin/epics
             "order": module.order,
             "estimated_hours": getattr(module, 'estimated_hours', 0.0),
             "lesson_count": len(module.lessons),

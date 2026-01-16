@@ -138,10 +138,7 @@ class LessonContentResponse(BaseModel):
     content_type: str = Field(..., description="text|video|mixed")
     text_content: Optional[str] = Field(None, description="Nội dung HTML/Markdown")
     video_info: Optional[VideoInfo] = Field(None, description="Thông tin video nếu có")
-<<<<<<< HEAD
-=======
     simulation_html: Optional[str] = Field(None, description="Nội dung HTML cho simulation nếu có")
->>>>>>> origin/epics
     attachments: List[AttachmentFile] = Field(default_factory=list, description="Tài liệu đính kèm")
     
     # Learning objectives - ADDED theo API_SCHEMA.md

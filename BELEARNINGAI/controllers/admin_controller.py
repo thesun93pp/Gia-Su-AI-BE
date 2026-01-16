@@ -26,13 +26,6 @@ from schemas.admin import (
     AdminCourseUpdateRequest,
     AdminCourseUpdateResponse,
     AdminDeleteCourseResponse,
-<<<<<<< HEAD
-=======
-    AdminModuleCreateRequest,
-    AdminModuleCreateResponse,
-    AdminLessonCreateRequest,
-    AdminCreateLessonResponse,
->>>>>>> origin/epics
     AdminClassListResponse,
     AdminClassDetailResponse
 )
@@ -492,30 +485,6 @@ async def handle_create_course_admin(
     current_user: Dict
 ) -> AdminCourseCreateResponse:
     """
-<<<<<<< HEAD
-    4.2.3: Tạo khóa học chính thức (public course)
-
-    Args:
-        course_data: Dữ liệu khóa học mới
-        current_user: Dict chứa thông tin admin từ JWT
-
-    Returns:
-        AdminCourseCreateResponse với thông tin khóa học mới
-    """
-    try:
-        if current_user.get("role") != "admin":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Chỉ admin mới có quyền tạo khóa học chính thức"
-            )
-
-        # Lấy admin_id từ current_user
-        admin_id = current_user.get("user_id")
-
-        # Gọi course_service.create_course_admin với đầy đủ tham số
-        created_course = await course_service.create_course_admin(
-            admin_id=admin_id,
-=======
     4.2.3: Tạo khóa học chính thức (Admin)
     Gọi hàm create_course_admin từ service với tất cả tham số
     """
@@ -534,22 +503,10 @@ async def handle_create_course_admin(
         # Tạo khóa học
         result = await course_service.create_course_admin(
             admin_id=current_user.get("user_id"),
->>>>>>> origin/epics
             title=course_data.title,
             description=course_data.description,
             category=course_data.category,
             level=course_data.level,
-<<<<<<< HEAD
-            language=course_data.language,
-            thumbnail_url=course_data.thumbnail_url,
-            preview_video_url=course_data.preview_video_url,
-            prerequisites=course_data.prerequisites,
-            learning_outcomes=course_data.learning_outcomes,
-            status=course_data.status
-        )
-        return AdminCourseCreateResponse(**created_course)
-
-=======
             thumbnail_url=course_data.thumbnail_url,
             preview_video_url=course_data.preview_video_url,
             prerequisites=course_data.prerequisites,
@@ -560,17 +517,12 @@ async def handle_create_course_admin(
         
         return AdminCourseCreateResponse(**result)
         
->>>>>>> origin/epics
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-<<<<<<< HEAD
-            detail=f"Lỗi khi tạo khóa học: {str(e)}"
-=======
             detail=str(e)
->>>>>>> origin/epics
         )
 
 
@@ -597,13 +549,9 @@ async def handle_update_course_admin(
                 detail="Chỉ admin mới có quyền chỉnh sửa khóa học"
             )
         
-<<<<<<< HEAD
-        updated_course = await admin_service.update_course_admin(course_id, course_data.dict(exclude_unset=True))
-=======
         update_data = course_data.dict(exclude_unset=True)
 
         updated_course = await admin_service.update_course_admin(course_id, update_data)
->>>>>>> origin/epics
         return AdminCourseUpdateResponse(**updated_course)
         
     except HTTPException:
@@ -648,8 +596,6 @@ async def handle_delete_course_admin(
         )
 
 
-<<<<<<< HEAD
-=======
 async def handle_create_module_admin(
     course_id: str,
     module_data: AdminModuleCreateRequest,
@@ -765,7 +711,6 @@ async def handle_create_lesson_admin(
 
 
 
->>>>>>> origin/epics
 # ============================================================================
 # Section 4.3: GIÁM SÁT LỚP HỌC
 # ============================================================================

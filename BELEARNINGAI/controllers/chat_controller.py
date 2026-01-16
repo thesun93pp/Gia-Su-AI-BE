@@ -68,9 +68,6 @@ async def handle_send_chat_message(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Bạn cần đăng ký khóa học để sử dụng chatbot"
             )
-<<<<<<< HEAD
-    
-=======
 
     #Validate image nếu có
     if request.image_base64:
@@ -102,7 +99,6 @@ async def handle_send_chat_message(
                 detail="Định dạng base64 không hợp lệ"
             )
 
->>>>>>> origin/epics
     # Tìm hoặc tạo conversation
     if request.conversation_id:
         conversation = await Conversation.find_one(
@@ -127,26 +123,11 @@ async def handle_send_chat_message(
         )
         await conversation.insert()
     
-<<<<<<< HEAD
-    # Lưu user message
-=======
     # Lưu user message (với ảnh nếu có)
->>>>>>> origin/epics
     user_message = {
         "id": generate_uuid(),
         "role": "user",
         "content": request.question,
-<<<<<<< HEAD
-        "timestamp": datetime.utcnow()
-    }
-    conversation.messages.append(user_message)
-    
-    # Gọi AI với course context
-    ai_response_text = await chat_with_course_context(
-        course_id=course_id,
-        question=request.question,
-        conversation_history=conversation.messages
-=======
         "timestamp": datetime.utcnow(),
         "image_base64": request.image_base64, 
         "image_mime_type": request.image_mime_type
@@ -160,7 +141,6 @@ async def handle_send_chat_message(
         conversation_history=conversation.messages,
         image_base64=request.image_base64, 
         image_mime_type=request.image_mime_type 
->>>>>>> origin/epics
     )
     
     # Lưu AI response
@@ -182,15 +162,10 @@ async def handle_send_chat_message(
         answer=ai_response_text,
         timestamp=ai_message["timestamp"],
         sources=[],
-<<<<<<< HEAD
-        related_lessons=[]
-        # tokens_used is optional, will be added when AI service is integrated
-=======
         related_lessons=[],
         has_image=bool(request.image_base64), 
         image_analyzed=bool(request.image_base64) 
         
->>>>>>> origin/epics
     )
 
 
