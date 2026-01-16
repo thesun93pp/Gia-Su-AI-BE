@@ -143,7 +143,7 @@ async def send_message(
     # Lấy AI response với context
     ai_response_text = await chat_with_course_context(
         course_id=conversation.course_id,
-        user_message=user_message,
+        question=user_message,
         conversation_history=conversation.messages
     )
     

@@ -10,7 +10,11 @@ from typing import Dict
 from fastapi import HTTPException, status
 
 # Import schemas
-from schemas.progress import ProgressCourseResponse
+from schemas.progress import (
+    ProgressCourseResponse,
+    ModuleProgress,
+    LessonProgress
+)
 
 # Import services
 from services import enrollment_service, course_service
@@ -79,6 +83,7 @@ async def handle_get_course_progress(
         progress = Progress(
             user_id=user_id,
             course_id=course_id,
+            enrollment_id=str(enrollment.id),
             overall_progress_percent=0.0,
             modules=[],
             total_time_spent_minutes=0,
@@ -122,22 +127,17 @@ async def handle_get_course_progress(
         if module_progress_percent == 100:
             completed_modules += 1
         
-        modules_progress.append({
-            "module_id": module.id,
-            "module_title": module.title,
-            "progress_percent": module_progress_percent,
-            "completed_lessons": completed_lessons,
-            "total_lessons": total_lessons,
-            "lessons": lessons_progress
-        })
+            modules_progress.append({
+                "module_id": module.id,
+                "module_title": module.title,
+                "progress_percent": module_progress_percent,
+                "completed_lessons": completed_lessons,
+                "total_lessons": total_lessons,
+                "lessons": lessons_progress
+            })
     
     # Calculate overall progress
     overall_progress = (completed_modules / total_modules * 100) if total_modules > 0 else 0.0
-    
-    # Update progress record
-    progress.overall_progress_percent = overall_progress
-    progress.modules = modules_progress
-    await progress.save()
     
     # Calculate estimated hours remaining
     total_duration = sum(
@@ -147,22 +147,35 @@ async def handle_get_course_progress(
     completed_duration = total_duration * (overall_progress / 100)
     estimated_hours_remaining = max(0, total_duration - completed_duration)
     
-    # Calculate study streak (TODO: implement proper logic)
-    study_streak_days = 0  # Placeholder
+    # Update progress record fields (but don't set modules field which doesn't exist)
+    progress.overall_progress_percent = overall_progress
+    progress.completed_lessons_count = sum(module["completed_lessons"] for module in modules_progress)
+    progress.total_lessons_count = sum(module["total_lessons"] for module in modules_progress)
+    progress.estimated_hours_remaining = estimated_hours_remaining
+    await progress.save()
     
-    # Calculate average quiz score (TODO: implement)
-    avg_quiz_score = 0.0  # Placeholder
-    
+    # Create response với đúng structure của ProgressCourseResponse
     return ProgressCourseResponse(
         course_id=course_id,
         course_title=course.title,
-        overall_progress_percent=overall_progress,
-        total_time_spent_minutes=progress.total_time_spent_minutes,
+        overall_progress=overall_progress,
+        modules=[
+            ModuleProgress(
+                id=module["module_id"],
+                title=module["module_title"],
+                progress=module["progress_percent"],
+                lessons=[
+                    LessonProgress(
+                        id=lesson["lesson_id"],
+                        title=lesson["lesson_title"],
+                        status=lesson["status"],
+                        completion_date=None
+                    ) for lesson in module["lessons"]
+                ]
+            ) for module in modules_progress
+        ],
         estimated_hours_remaining=estimated_hours_remaining,
-        study_streak_days=study_streak_days,
-        avg_quiz_score=avg_quiz_score,
-        completed_modules=completed_modules,
-        total_modules=total_modules,
-        modules=modules_progress,
-        last_activity_date=progress.last_activity_date
+        study_streak_days=progress.study_streak_days if hasattr(progress, 'study_streak_days') else 0,
+        avg_quiz_score=progress.avg_quiz_score if hasattr(progress, 'avg_quiz_score') else 0.0,
+        total_hours_spent=progress.total_time_spent_minutes / 60.0 if hasattr(progress, 'total_time_spent_minutes') else 0.0
     )

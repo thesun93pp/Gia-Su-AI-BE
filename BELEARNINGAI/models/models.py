@@ -5,15 +5,74 @@ Naming: snake_case theo Python convention
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from beanie import Document, Indexed
-from pydantic import Field, EmailStr
+from pydantic import Field, EmailStr, BaseModel
 import uuid
 
 
 def generate_uuid() -> str:
     """Tạo UUID mới cho document"""
     return str(uuid.uuid4())
+
+
+# ============================================================================
+# PROGRESS TRACKING MODELS
+# ============================================================================
+
+class LessonProgressItem(BaseModel):
+    """
+    Chi tiết tiến độ của một lesson
+    Sử dụng trong Progress.lessons_progress array
+    Tuân thủ: dashboard_service.py logic (parse by completion_date)
+    """
+    lesson_id: str = Field(..., description="UUID của lesson")
+    lesson_title: str = Field(..., description="Tên lesson")
+    status: str = Field(..., description="completed|in-progress|not-started")
+    completion_date: Optional[datetime] = Field(None, description="Ngày hoàn thành (null nếu chưa xong)")
+    time_spent_minutes: int = Field(default=0, description="Thời gian học lesson này (phút)")
+    video_progress_seconds: int = Field(default=0, description="Tiến độ xem video (giây)")
+
+
+# ============================================================================
+# EMBEDDED MODELS FOR COURSE (Lesson & Module nested in Course)
+# ============================================================================
+
+class EmbeddedLesson(BaseModel):
+    """Lesson embedded trong Module"""
+    id: str = Field(default_factory=generate_uuid)
+    title: str
+    description: Optional[str] = None
+    order: int
+    content: str = ""
+    content_type: str = "text"  # text|video|audio|code|mixed
+    duration_minutes: int = 0
+    video_url: Optional[str] = None
+    audio_url: Optional[str] = None  # URL audio file (mp3, wav, ogg)
+    resources: List[dict] = Field(default_factory=list)
+    learning_objectives: List[str] = Field(default_factory=list, description="Mục tiêu học tập của lesson")
+    quiz_id: Optional[str] = None
+    is_published: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class EmbeddedModule(BaseModel):
+    """Module embedded trong Course"""
+    id: str = Field(default_factory=generate_uuid)
+    title: str
+    description: str
+    order: int
+    difficulty: str = "Basic"
+    estimated_hours: float = 0
+    learning_outcomes: List[dict] = Field(default_factory=list)
+    prerequisites: List[str] = Field(default_factory=list, description="Module IDs tiên quyết")
+    resources: List[dict] = Field(default_factory=list, description="Tài liệu module-level")
+    lessons: List[EmbeddedLesson] = Field(default_factory=list)
+    total_lessons: int = 0
+    total_duration_minutes: int = 0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 # ============================================================================
@@ -109,18 +168,24 @@ class Lesson(Document):
     
     # Nội dung - theo LessonSummary schema
     content: str = Field(default="", description="Nội dung HTML hoặc markdown")
-    content_type: str = Field(default="text", description="Loại nội dung: text|video|quiz|mixed")
+    content_type: str = Field(default="text", description="Loại nội dung: text|video|audio|code|mixed")
     duration_minutes: int = Field(default=0, description="Thời lượng lesson (phút)")
     video_url: Optional[str] = Field(None, description="URL video bài học")
+    audio_url: Optional[str] = Field(None, description="URL audio bài giảng (mp3, wav, ogg)")
+    
+    # Learning objectives - ADDED theo API_SCHEMA.md Section 4.2
+    learning_objectives: List[str] = Field(default_factory=list, description="Mục tiêu học tập cụ thể của bài học")
     
     # Resources theo schema structure
     resources: List[dict] = Field(default_factory=list, description="Tài liệu kèm theo")
     # Resource structure: {
     #   "id": "uuid",
     #   "title": "Resource name",
-    #   "type": "pdf|slide|code|video|link", 
+    #   "type": "pdf|slide|code|video|audio|link", 
     #   "url": "download/view link",
     #   "size_mb": float,
+    #   "audio_format": "mp3|wav|ogg" (optional, for audio type),
+    #   "duration_seconds": int (optional, for video/audio),
     #   "description": "optional"
     # }
     
@@ -209,6 +274,7 @@ class Course(Document):
     instructor_id: Optional[str] = Field(None, description="Instructor assigned to teach this course")
     instructor_name: Optional[str] = Field(None, description="Tên giảng viên (denormalized for performance)")
     instructor_avatar: Optional[str] = Field(None, description="Avatar giảng viên (denormalized for performance)")
+    instructor_bio: Optional[str] = Field(None, description="Bio giảng viên (denormalized for performance)")
     
     # Nội dung học tập - theo LearningOutcome schema từ course.py
     learning_outcomes: List[dict] = Field(default_factory=list, description="Mục tiêu học tập")
@@ -219,6 +285,9 @@ class Course(Document):
     # }
     
     prerequisites: List[str] = Field(default_factory=list, description="Yêu cầu kiến thức đầu vào")
+    
+    # Nội dung khóa học - embedded modules và lessons
+    modules: List[EmbeddedModule] = Field(default_factory=list, description="Danh sách modules trong course")
     
     # Thống kê - theo CourseStatistics schema
     total_duration_minutes: int = Field(default=0, description="Tổng thời lượng khóa học (phút)")
@@ -264,6 +333,8 @@ class Enrollment(Document):
     # Trạng thái - theo schemas
     status: str = Field(default="active", description="active|completed|cancelled")
     progress_percent: float = Field(default=0.0, description="Tiến độ 0-100")
+    # Alias for API compatibility - completion_rate same as progress_percent
+    completion_rate: float = Field(default=0.0, description="Alias của progress_percent cho API compatibility")
     
     # Thống kê - theo EnrollmentDetailResponse
     completed_lessons: List[str] = Field(default_factory=list, description="Danh sách UUID lessons đã hoàn thành")
@@ -275,7 +346,19 @@ class Enrollment(Document):
     enrolled_at: datetime = Field(default_factory=datetime.utcnow, description="Thời gian đăng ký")
     last_accessed_at: Optional[datetime] = Field(None, description="Lần truy cập cuối")
     completed_at: Optional[datetime] = Field(None, description="Thời gian hoàn thành khóa học")
-    
+
+    # Adaptive Learning Fields (NEW)
+    adaptive_learning_enabled: bool = Field(default=False, description="Có bật adaptive learning không")
+    skipped_modules: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Danh sách modules đã skip qua assessment. Format: [{module_id, skip_reason, skipped_at, assessment_session_id}]"
+    )
+    recommended_start_module_id: Optional[str] = Field(None, description="Module được đề xuất bắt đầu học")
+    learning_path_decisions: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Quyết định adaptive path cho từng module. Format: [{module_id, decision, reason, proficiency_score}]"
+    )
+
     class Settings:
         name = "enrollments"
         indexes = [
@@ -402,9 +485,11 @@ class Quiz(Document):
     id: str = Field(default_factory=generate_uuid, alias="_id")
     lesson_id: str = Field(..., description="UUID lesson chứa quiz này")
     course_id: str = Field(..., description="UUID khóa học (denormalized)")
+    module_id: Optional[str] = Field(None, description="UUID module (for module-level assessments)")
     
     title: str = Field(..., description="Tên quiz")
     description: str = Field(..., description="Mô tả quiz")
+    quiz_type: Optional[str] = Field(None, description="review|practice|final_check (for module assessments)")
     
     # Cấu hình - theo QuizDetailResponse và QuizCreateRequest
     time_limit_minutes: Optional[int] = Field(None, description="Thời gian làm bài (phút), null = không giới hạn")
@@ -442,11 +527,14 @@ class Quiz(Document):
         indexes = [
             "lesson_id",
             "course_id",
+            "module_id",  # For module-level assessments
             "created_by",
             "is_draft",
+            "quiz_type",  # For filtering by assessment type
             "created_at",
             [("course_id", 1), ("is_draft", 1)],
-            [("lesson_id", 1), ("is_draft", 1)]
+            [("lesson_id", 1), ("is_draft", 1)],
+            [("module_id", 1), ("quiz_type", 1)]  # For module assessments
         ]
 
 
@@ -526,15 +614,11 @@ class Progress(Document):
     completed_lessons_count: int = Field(default=0, description="Số lessons đã hoàn thành")
     total_lessons_count: int = Field(default=0, description="Tổng số lessons trong khóa học")
     
-    # Chi tiết từng lesson - theo LessonProgress schema
-    lessons_progress: List[dict] = Field(default_factory=list, description="Tiến độ từng lesson")
-    # Lesson progress structure: {
-    #   "lesson_id": "uuid",
-    #   "lesson_title": "tên lesson",
-    #   "status": "completed|in-progress|not-started",
-    #   "completion_date": datetime or null,
-    #   "time_spent_minutes": int
-    # }
+    # Chi tiết từng lesson - FIXED: Sử dụng LessonProgressItem schema
+    lessons_progress: List[LessonProgressItem] = Field(
+        default_factory=list, 
+        description="Tiến độ chi tiết từng lesson với validated structure"
+    )
     
     # Thống kê học tập - theo ProgressCourseResponse
     total_time_spent_minutes: int = Field(default=0, description="Tổng thời gian học (phút)")
@@ -546,7 +630,25 @@ class Progress(Document):
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
+
+    # Adaptive Learning Fields (NEW)
+    auto_skipped_lessons: List[str] = Field(
+        default_factory=list,
+        description="Danh sách lesson_id đã auto-skip (không phải user tự skip)"
+    )
+    learning_path_type: str = Field(
+        default="sequential",
+        description="Loại lộ trình: sequential (tuần tự) | adaptive (thích ứng) | custom (tùy chỉnh)"
+    )
+    adjustment_history: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Lịch sử điều chỉnh adaptive. Format: [{adjusted_at, adjustment_type, reason, actions_taken, user_accepted}]"
+    )
+    learning_behavior_metrics: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Metrics về hành vi học tập. Format: {avg_speed_ratio, avg_attempts, pattern_type, last_pattern_check}"
+    )
+
     class Settings:
         name = "progress"
         indexes = [

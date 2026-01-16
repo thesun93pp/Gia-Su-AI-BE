@@ -95,7 +95,10 @@ async def get_assessment_session(session_id: str) -> Optional[AssessmentSession]
     try:
         session = await AssessmentSession.get(session_id)
         return session
-    except Exception:
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to retrieve assessment session: {session_id}, error: {str(e)}")
         return None
 
 
@@ -194,10 +197,14 @@ async def submit_assessment(
         subject=session.subject
     )
     
-    # Lưu kết quả
+    # Lưu kết quả - skill_analysis là dict chứa cả breakdown và analysis
     session.overall_score = evaluation["overall_score"]
     session.proficiency_level = evaluation["proficiency_level"]
-    session.skill_analysis = evaluation["skill_analysis"]
+    session.skill_analysis = {
+        "skill_analysis": evaluation["skill_analysis"],
+        "score_breakdown": evaluation["score_breakdown"],
+        "overall_feedback": evaluation["overall_feedback"]
+    }
     session.knowledge_gaps = evaluation["knowledge_gaps"]
     
     session.status = "evaluated"

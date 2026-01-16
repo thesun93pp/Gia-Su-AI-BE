@@ -29,7 +29,7 @@ from middleware.auth import get_current_user
 
 # Khởi tạo router với prefix
 router = APIRouter(
-    prefix="/api/v1/enrollments",
+    prefix="/enrollments",
     tags=["Enrollments - Đăng ký khóa học"]
 )
 

@@ -75,11 +75,17 @@ async def handle_generate_assessment(
         )
         
     except ValueError as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Invalid assessment request - user: {user_id}, category: {request.category}, subject: {request.subject}, level: {request.level}, error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Assessment generation failed - user: {user_id}, category: {request.category}, subject: {request.subject}, level: {request.level}, error: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi khi sinh câu hỏi: {str(e)}"
@@ -184,6 +190,9 @@ async def handle_submit_assessment(
     except HTTPException:
         raise
     except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Assessment submission failed - session_id: {session_id}, user: {user_id}, answers_count: {len(request.answers)}, error: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi khi submit bài: {str(e)}"
@@ -321,6 +330,9 @@ async def handle_get_assessment_results(
     except HTTPException:
         raise
     except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Assessment results retrieval failed - session_id: {session_id}, user: {user_id}, error: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi khi lấy kết quả: {str(e)}"

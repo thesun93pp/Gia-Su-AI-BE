@@ -7,7 +7,7 @@ Section 2.5.1-2.5.5
 from typing import Dict, List, Optional
 from datetime import datetime
 
-from models.models import Course, Module, Lesson, generate_uuid
+from models.models import Course, EmbeddedModule, EmbeddedLesson, generate_uuid
 from services.ai_service import generate_course_from_prompt
 
 
@@ -18,8 +18,9 @@ from services.ai_service import generate_course_from_prompt
 async def create_course_from_ai_prompt(
     user_id: str,
     prompt: str,
-    category: Optional[str] = None,
-    level: Optional[str] = None
+    level: Optional[str] = "Beginner",
+    estimated_duration_weeks: Optional[int] = 4,
+    language: Optional[str] = "vi"
 ) -> Dict:
     """
     Tạo khóa học từ AI prompt
@@ -33,17 +34,19 @@ async def create_course_from_ai_prompt(
     Args:
         user_id: ID học viên
         prompt: Mô tả bằng ngôn ngữ tự nhiên
-        category: Danh mục (optional)
-        level: Cấp độ (optional)
+        level: Cấp độ (Beginner, Intermediate, Advanced)
+        estimated_duration_weeks: Thời lượng học tập ước tính
+        language: Ngôn ngữ khóa học
         
     Returns:
         Dict chứa course data và modules
     """
     # Gọi AI service để sinh course structure
+    # Chú ý: ai_service.generate_course_from_prompt expects difficulty, not level
     ai_result = await generate_course_from_prompt(
         prompt=prompt,
-        category=category,
-        level=level
+        user_preferences=None,
+        difficulty=level  # Map level to difficulty parameter
     )
     
     # Tạo modules từ AI result
@@ -54,7 +57,7 @@ async def create_course_from_ai_prompt(
         # Tạo lessons cho module
         lessons = []
         for lesson_idx, lesson_data in enumerate(module_data.get("lessons", [])):
-            lesson = Lesson(
+            lesson = EmbeddedLesson(
                 id=generate_uuid(),
                 title=lesson_data.get("title"),
                 order=lesson_idx + 1,
@@ -68,7 +71,7 @@ async def create_course_from_ai_prompt(
             total_lessons += 1
         
         # Tạo module
-        module = Module(
+        module = EmbeddedModule(
             id=generate_uuid(),
             title=module_data.get("title"),
             description=module_data.get("description", ""),
@@ -76,7 +79,9 @@ async def create_course_from_ai_prompt(
             difficulty=module_data.get("difficulty", "Basic"),
             estimated_hours=module_data.get("estimated_hours", 0),
             learning_outcomes=module_data.get("learning_outcomes", []),
-            lessons=lessons
+            lessons=lessons,
+            total_lessons=len(lessons),
+            total_duration_minutes=sum(l.duration_minutes for l in lessons)
         )
         modules.append(module)
     
@@ -85,14 +90,16 @@ async def create_course_from_ai_prompt(
         id=generate_uuid(),
         title=ai_result.get("title"),
         description=ai_result.get("description"),
-        category=ai_result.get("category", category or "General"),
-        level=ai_result.get("level", level or "Beginner"),
+        category=ai_result.get("category", "General"),
+        level=ai_result.get("level", level),  # Use AI level or fallback to param level
         status="draft",
         owner_id=user_id,
         owner_type="student",  # Personal course
         modules=modules,
         learning_outcomes=ai_result.get("learning_outcomes", []),
-        total_duration_minutes=sum(m.estimated_hours * 60 for m in modules),
+        total_duration_minutes=sum(m.total_duration_minutes for m in modules),
+        total_modules=len(modules),
+        total_lessons=total_lessons,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow()
     )
@@ -100,29 +107,36 @@ async def create_course_from_ai_prompt(
     # Lưu vào DB
     await course.insert()
     
-    # Return response data
+    # Return response data matching schema
     return {
-        "course_id": course.id,
+        "id": course.id,  # Changed from course_id to id
         "title": course.title,
         "description": course.description,
         "category": course.category,
         "level": course.level,
         "status": course.status,
+        "owner_id": course.owner_id,
+        "owner_type": course.owner_type,
         "modules": [
             {
                 "id": m.id,
                 "title": m.title,
                 "description": m.description,
                 "order": m.order,
-                "estimated_hours": m.estimated_hours,
+                "difficulty": m.difficulty,
                 "learning_outcomes": m.learning_outcomes,
-                "lessons_count": len(m.lessons)
+                "lessons": [
+                    {
+                        "id": lesson.id,
+                        "title": lesson.title,
+                        "order": lesson.order,
+                        "content_outline": lesson.content[:200] if lesson.content else ""  # First 200 chars as outline
+                    }
+                    for lesson in m.lessons
+                ]
             }
             for m in modules
         ],
-        "total_modules": len(modules),
-        "total_lessons": total_lessons,
-        "estimated_duration_hours": sum(m.estimated_hours for m in modules),
         "created_at": course.created_at
     }
 

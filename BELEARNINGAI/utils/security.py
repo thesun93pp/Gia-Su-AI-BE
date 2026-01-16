@@ -43,7 +43,7 @@ def create_access_token(data: Dict[str, Any]) -> str:
     """Sinh access token JWT."""
 
     to_encode = _token_payload(data, timedelta(minutes=_settings.access_token_expire_minutes))
-    return jwt.encode(to_encode, _settings.jwt_secret_key, algorithm=_settings.jwt_algorithm)
+    return jwt.encode(to_encode, _settings.secret_key, algorithm=_settings.algorithm)
 
 
 def create_refresh_token(data: Dict[str, Any]) -> str:
@@ -51,13 +51,13 @@ def create_refresh_token(data: Dict[str, Any]) -> str:
 
     expire_days = getattr(_settings, "refresh_token_expire_days", 7)
     to_encode = _token_payload(data, timedelta(days=expire_days))
-    return jwt.encode(to_encode, _settings.jwt_secret_key, algorithm=_settings.jwt_algorithm)
+    return jwt.encode(to_encode, _settings.secret_key, algorithm=_settings.algorithm)
 
 
 def decode_token(token: str) -> Dict[str, Any]:
     """Giải mã JWT, trả payload."""
 
-    return jwt.decode(token, _settings.jwt_secret_key, algorithms=[_settings.jwt_algorithm])
+    return jwt.decode(token, _settings.secret_key, algorithms=[_settings.algorithm])
 
 
 def generate_session_id() -> str:

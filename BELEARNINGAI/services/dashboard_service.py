@@ -6,6 +6,7 @@ Tuân thủ: CHUCNANG.md Section 2.7
 
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
+from beanie.operators import In
 from models.models import (
     Enrollment, Course, Progress, QuizAttempt, User, Quiz, Class
 )
@@ -31,66 +32,219 @@ async def get_student_dashboard(user_id: str) -> Dict:
     Returns:
         Dict chứa in_progress_courses và pending_quizzes
     """
-    # Lấy các enrollment đang active, sort theo last_accessed
-    enrollments = await Enrollment.find(
-        Enrollment.user_id == user_id,
-        Enrollment.status == "active"
-    ).sort(-Enrollment.updated_at).limit(5).to_list()
+    import logging
+    import traceback
+    logger = logging.getLogger(__name__)
     
-    in_progress_courses = []
-    for enrollment in enrollments:
-        # Lấy course info
-        course = await Course.get(enrollment.course_id)
-        if not course:
-            continue
-            
-        # Lấy progress
-        progress = await Progress.find_one(
-            Progress.user_id == user_id,
-            Progress.course_id == enrollment.course_id
-        )
+    try:
+        logger.info(f"[STUDENT DASHBOARD] Getting dashboard for user: {user_id}")
         
-        in_progress_courses.append({
-            "course_id": enrollment.course_id,
-            "title": course.title,
-            "progress": progress.overall_progress_percent if progress else 0.0,
-            "last_accessed": progress.last_accessed_at if progress else enrollment.updated_at
-        })
-    
-    # Lấy pending quizzes (chưa hoàn thành hoặc failed)
-    # Query quiz attempts với status != "passed"
-    pending_quizzes = []
-    
-    # Lấy tất cả courses user đang enroll
-    enrolled_course_ids = [e.course_id for e in enrollments]
-    
-    for course_id in enrolled_course_ids:
-        course = await Course.get(course_id)
-        if not course:
-            continue
+        # Lấy các enrollment đang active, sort theo last_accessed
+        enrollments = await Enrollment.find(
+            Enrollment.user_id == user_id,
+            Enrollment.status == "active"
+        ).sort(-Enrollment.enrolled_at).limit(5).to_list()
         
-        # Iterate qua modules để tìm quiz
-        for module in course.modules:
-            if module.default_quiz_id:
-                # Kiểm tra xem user đã pass quiz này chưa
-                latest_attempt = await QuizAttempt.find(
-                    QuizAttempt.user_id == user_id,
-                    QuizAttempt.quiz_id == module.default_quiz_id
-                ).sort(-QuizAttempt.created_at).first_or_none()
+        logger.info(f"[STUDENT DASHBOARD] Found {len(enrollments)} active enrollments")
+        
+        in_progress_courses = []
+        for enrollment in enrollments:
+            try:
+                # Lấy course info
+                course = await Course.get(enrollment.course_id)
+                if not course:
+                    logger.warning(f"[STUDENT DASHBOARD] Course not found: {enrollment.course_id}")
+                    continue
+                    
+                # Lấy progress
+                progress = await Progress.find_one(
+                    Progress.user_id == user_id,
+                    Progress.course_id == enrollment.course_id
+                )
                 
-                # Nếu chưa attempt hoặc chưa pass
-                if not latest_attempt or latest_attempt.status != "passed":
-                    pending_quizzes.append({
-                        "quiz_id": module.default_quiz_id,
-                        "title": f"Quiz {module.title}",
-                        "course_title": course.title,
-                        "due_at": None  # Có thể thêm logic due date nếu cần
-                    })
-    
-    return {
-        "in_progress_courses": in_progress_courses,
-        "pending_quizzes": pending_quizzes[:10]  # Limit 10 pending quizzes
-    }
+                # Ensure last_accessed is never None
+                last_accessed = (
+                    progress.last_accessed_at if progress and progress.last_accessed_at
+                    else enrollment.enrolled_at if enrollment.enrolled_at
+                    else datetime.utcnow()
+                )
+                
+                in_progress_courses.append({
+                    "course_id": enrollment.course_id,
+                    "title": course.title,
+                    "progress": progress.overall_progress_percent if progress else 0.0,
+                    "last_accessed": last_accessed
+                })
+                logger.info(f"[STUDENT DASHBOARD] Added course: {course.title}")
+            except Exception as e:
+                logger.error(f"[STUDENT DASHBOARD] Error processing enrollment {enrollment.id}: {str(e)}")
+                logger.error(traceback.format_exc())
+                continue
+        
+        # Lấy pending quizzes (chưa hoàn thành hoặc failed)
+        pending_quizzes = []
+        
+        # Lấy tất cả courses user đang enroll
+        enrolled_course_ids = [e.course_id for e in enrollments]
+        
+        logger.info(f"[STUDENT DASHBOARD] Checking quizzes for {len(enrolled_course_ids)} courses")
+        
+        # Query lessons của các courses này (lessons có quiz_id)
+        from models.models import Lesson
+        
+        lessons = await Lesson.find(
+            In(Lesson.course_id, enrolled_course_ids),
+            Lesson.quiz_id != None  # Chỉ lấy lessons có quiz
+        ).to_list()
+        
+        logger.info(f"[STUDENT DASHBOARD] Found {len(lessons)} lessons with quizzes")
+        
+        for lesson in lessons:
+            try:
+                if lesson.quiz_id:
+                    # Kiểm tra xem user đã pass quiz này chưa
+                    latest_attempt = await QuizAttempt.find(
+                        QuizAttempt.user_id == user_id,
+                        QuizAttempt.quiz_id == lesson.quiz_id
+                    ).sort(-QuizAttempt.created_at).first_or_none()
+                    
+                    # Nếu chưa attempt hoặc chưa pass
+                    if not latest_attempt or latest_attempt.status != "passed":
+                        # Get course title
+                        course = await Course.get(lesson.course_id)
+                        course_title = course.title if course else "Unknown Course"
+                        
+                        pending_quizzes.append({
+                            "quiz_id": lesson.quiz_id,
+                            "title": f"Quiz {lesson.title}",
+                            "course_title": course_title,
+                            "due_at": None  # Có thể thêm logic due date nếu cần
+                        })
+                        logger.info(f"[STUDENT DASHBOARD] Added pending quiz: {lesson.title}")
+            except Exception as e:
+                logger.error(f"[STUDENT DASHBOARD] Error processing lesson {lesson.id}: {str(e)}")
+                continue
+        
+        logger.info(f"[STUDENT DASHBOARD] Returning {len(in_progress_courses)} courses, {len(pending_quizzes)} quizzes")
+        
+        # Get user info
+        user = await User.get(user_id)
+        full_name = user.full_name if user else "Unknown User"
+        
+        # Calculate overview stats
+        all_enrollments = await Enrollment.find(Enrollment.user_id == user_id).to_list()
+        total_enrolled = len(all_enrollments)
+        active_count = sum(1 for e in all_enrollments if e.status == "active")
+        completed_count = sum(1 for e in all_enrollments if e.status == "completed")
+        
+        # Get total lessons completed from Progress
+        all_progress = await Progress.find(Progress.user_id == user_id).to_list()
+        total_lessons_completed = sum(p.completed_lessons_count for p in all_progress)
+        total_study_hours = sum(p.total_time_spent_minutes for p in all_progress) // 60
+        
+        # Get streak (simplified - using latest progress)
+        current_streak = max((p.study_streak_days for p in all_progress), default=0)
+        
+        # Performance summary
+        all_quiz_attempts = await QuizAttempt.find(QuizAttempt.user_id == user_id).to_list()
+        if all_quiz_attempts:
+            avg_quiz_score = sum(a.score for a in all_quiz_attempts) / len(all_quiz_attempts)
+            passed_count = sum(1 for a in all_quiz_attempts if a.passed)
+            quiz_pass_rate = (passed_count / len(all_quiz_attempts) * 100)
+        else:
+            avg_quiz_score = 0.0
+            quiz_pass_rate = 0.0
+        
+        # Lessons this week (simplified - count from last 7 days)
+        seven_days_ago = datetime.utcnow() - timedelta(days=7)
+        lessons_this_week = 0
+        for progress in all_progress:
+            for lesson_prog in progress.lessons_progress:
+                if lesson_prog.get("completion_date") and lesson_prog["completion_date"] >= seven_days_ago:
+                    lessons_this_week += 1
+        
+        # Get recommendations (simplified - get latest recommendation)
+        from models.models import Recommendation
+        latest_recommendation = await Recommendation.find(
+            Recommendation.user_id == user_id
+        ).sort(-Recommendation.created_at).first_or_none()
+        
+        recommendations = []
+        if latest_recommendation and latest_recommendation.recommended_courses:
+            for rec_course in latest_recommendation.recommended_courses[:3]:  # Top 3
+                recommendations.append({
+                    "course_id": rec_course.get("course_id", ""),
+                    "title": rec_course.get("title", ""),
+                    "reason": rec_course.get("reason", "Phù hợp với bạn")
+                })
+        
+        # Format recent_courses with next_lesson
+        recent_courses_formatted = []
+        for course_data in in_progress_courses:
+            # Get next lesson (first incomplete lesson)
+            progress = await Progress.find_one(
+                Progress.user_id == user_id,
+                Progress.course_id == course_data["course_id"]
+            )
+            
+            next_lesson = {"lesson_id": "", "title": "Chưa có bài tiếp theo"}
+            if progress and progress.lessons_progress:
+                for lesson_prog in progress.lessons_progress:
+                    if lesson_prog.get("status") != "completed":
+                        next_lesson = {
+                            "lesson_id": lesson_prog.get("lesson_id", ""),
+                            "title": lesson_prog.get("lesson_title", "Bài học tiếp theo")
+                        }
+                        break
+            
+            # Get course for thumbnail
+            course = await Course.get(course_data["course_id"])
+            
+            recent_courses_formatted.append({
+                "course_id": course_data["course_id"],
+                "title": course_data["title"],
+                "thumbnail_url": course.thumbnail_url if course else None,
+                "progress_percent": course_data["progress"],
+                "last_accessed": course_data["last_accessed"],
+                "next_lesson": next_lesson
+            })
+        
+        # Format pending_quizzes with lesson_title and status
+        pending_quizzes_formatted = []
+        for quiz_data in pending_quizzes:
+            pending_quizzes_formatted.append({
+                "quiz_id": quiz_data["quiz_id"],
+                "title": quiz_data["title"],
+                "course_title": quiz_data["course_title"],
+                "lesson_title": quiz_data["title"],  # Using quiz title as lesson title
+                "due_date": quiz_data.get("due_at"),
+                "status": "not_started"  # Simplified
+            })
+        
+        return {
+            "user_id": user_id,
+            "full_name": full_name,
+            "overview": {
+                "total_courses_enrolled": total_enrolled,
+                "active_courses": active_count,
+                "completed_courses": completed_count,
+                "total_lessons_completed": total_lessons_completed,
+                "total_study_hours": total_study_hours,
+                "current_streak_days": current_streak
+            },
+            "recent_courses": recent_courses_formatted,
+            "pending_quizzes": pending_quizzes_formatted[:10],
+            "performance_summary": {
+                "average_quiz_score": round(avg_quiz_score, 2),
+                "quiz_pass_rate": round(quiz_pass_rate, 2),
+                "lessons_this_week": lessons_this_week
+            },
+            "recommendations": recommendations
+        }
+    except Exception as e:
+        logger.error(f"[STUDENT DASHBOARD] FATAL ERROR for user {user_id}: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise
 
 
 # ============================================================================
@@ -140,7 +294,7 @@ async def get_learning_stats(user_id: str) -> Dict:
             # Get course
             course = await Course.get(enrollment.course_id)
             
-            # Get quiz score for this course
+            # Get quiz score for this course (chỉ từ active enrollments)
             quiz_attempts = await QuizAttempt.find(
                 QuizAttempt.user_id == user_id,
                 QuizAttempt.course_id == enrollment.course_id
@@ -160,9 +314,12 @@ async def get_learning_stats(user_id: str) -> Dict:
                 "status": enrollment.status
             })
     
-    # Lấy tất cả quiz attempts
+    # Lấy tất cả quiz attempts (chỉ từ active enrollments để tính tổng thể)
+    enrolled_course_ids = [e.course_id for e in enrollments if e.status == "active"]
+    
     all_quiz_attempts = await QuizAttempt.find(
-        QuizAttempt.user_id == user_id
+        QuizAttempt.user_id == user_id,
+        In(QuizAttempt.course_id, enrolled_course_ids)  # FIX: Chỉ đếm quiz từ courses đang active
     ).to_list()
     
     # Đếm passed/failed
@@ -200,11 +357,12 @@ async def get_progress_chart(
     Lấy dữ liệu biểu đồ tiến độ theo thời gian
     
     Business Logic:
-    1. Query Progress với time filter
-    2. Group data theo ngày/tuần/tháng
-    3. Tính lessons completed và hours spent per time unit
-    4. Tạo chart data points
-    5. Tính summary statistics
+    1. Query enrollments đang active có last_accessed trong time range
+    2. Lấy Progress và parse lessons_progress array
+    3. Đếm lessons completed theo completion_date (incremental, không cumulative)
+    4. Tính hours spent từ time_spent_minutes trong từng lesson
+    5. Group data theo ngày/tuần/tháng
+    6. Tạo chart data points với summary statistics
     
     Args:
         user_id: ID của user
@@ -227,10 +385,12 @@ async def get_progress_chart(
     
     start_date = datetime.utcnow() - timedelta(days=days_back)
     
-    # Query enrollments
+    # FIX: Sử dụng enrollments với last_accessed_at để track activity theo ngày
+    # Thay vì dùng cumulative progress, ta đếm enrollments được accessed mỗi ngày
     query_filter = {
         "user_id": user_id,
-        "updated_at": {"$gte": start_date}
+        "status": "active",
+        "last_accessed_at": {"$gte": start_date}
     }
     
     if course_id:
@@ -238,34 +398,34 @@ async def get_progress_chart(
     
     enrollments = await Enrollment.find(query_filter).to_list()
     
-    # Lấy progress cho các enrollments
+    # Lấy progress để tính lessons completed
     course_ids = [e.course_id for e in enrollments]
     
     progress_list = await Progress.find(
         Progress.user_id == user_id,
-        Progress.course_id.in_(course_ids),
-        Progress.updated_at >= start_date
+        In(Progress.course_id, course_ids)
     ).to_list()
     
-    # Group data theo date
-    # Vì không có history chi tiết lessons completed theo ngày,
-    # ta ước tính dựa trên updated_at và lessons_progress
+    # Group data theo date dựa trên lessons_progress history
+    # Đếm số lessons completed trong từng time period
     date_map = {}
     
     for progress in progress_list:
-        # Parse date
-        date_key = progress.updated_at.strftime(date_format)
-        
-        if date_key not in date_map:
-            date_map[date_key] = {
-                "lessons_completed": 0,
-                "hours_spent": 0.0
-            }
-        
-        # Tính lessons completed trong khoảng thời gian
-        # (Giả sử progress.completed_lessons_count là cumulative)
-        date_map[date_key]["lessons_completed"] += progress.completed_lessons_count
-        date_map[date_key]["hours_spent"] += progress.total_time_spent_minutes / 60.0
+        # Phân tích lessons_progress để đếm lessons completed theo ngày
+        for lesson_prog in progress.lessons_progress:
+            if lesson_prog.get("status") == "completed" and lesson_prog.get("completion_date"):
+                completion_date = lesson_prog["completion_date"]
+                if completion_date >= start_date:
+                    date_key = completion_date.strftime(date_format)
+                    
+                    if date_key not in date_map:
+                        date_map[date_key] = {
+                            "lessons_completed": 0,
+                            "hours_spent": 0.0
+                        }
+                    
+                    date_map[date_key]["lessons_completed"] += 1
+                    date_map[date_key]["hours_spent"] += lesson_prog.get("time_spent_minutes", 0) / 60.0
     
     # Tạo chart data points
     chart_data = []
@@ -435,6 +595,7 @@ async def get_instructor_class_stats(
     - List all instructor's classes or filter by class_id
     - For each class: student_count, attendance_rate, avg_progress, quiz_completion
     - Calculate active_students (last 7 days)
+    - FIX: Filter progress chỉ của students trong class (dựa trên enrollment user_ids)
     - Aggregate totals
     
     Args:
@@ -486,9 +647,13 @@ async def get_instructor_class_stats(
         attendance_rate = (active_students / student_count * 100) if student_count > 0 else 0
         all_attendance_rates.append(attendance_rate)
         
-        # Calculate avg progress
+        # FIX: Calculate avg progress - chỉ của students trong class này
+        # Lấy user_ids từ enrollments của class
+        enrollment_user_ids = [e.user_id for e in enrollments]
+        
         progress_list = await Progress.find(
-            Progress.course_id == cls.course_id
+            Progress.course_id == cls.course_id,
+            In(Progress.user_id, enrollment_user_ids)  # FIX: Filter theo students của class
         ).to_list()
         
         avg_progress = sum(p.overall_progress_percent for p in progress_list) / len(progress_list) if progress_list else 0
@@ -543,8 +708,6 @@ async def get_instructor_class_stats(
         "avg_attendance": round(avg_attendance, 2),
         "avg_completion": round(avg_completion, 2)
     }
-
-
 async def get_instructor_progress_chart(
     instructor_id: str,
     time_range: str = "week",
@@ -557,6 +720,8 @@ async def get_instructor_progress_chart(
     - Get progress data across instructor's classes
     - Filter by time_range: day (7 days), week (4 weeks), month (6 months)
     - Filter by class_id if provided
+    - Chỉ đếm progress của students trong classes (filter qua enrollments)
+    - Parse lessons_progress theo completion_date (incremental, không cumulative)
     - Track: lessons_completed, quizzes_completed, active_students per time period
     - Create chart_data points
     
@@ -593,40 +758,52 @@ async def get_instructor_progress_chart(
     
     course_ids = [c.course_id for c in classes]
     
-    # Get progress data
+    # FIX: Get enrollments của classes để lấy student list
+    all_enrollments = await Enrollment.find(
+        In(Enrollment.course_id, course_ids),
+        Enrollment.status == "active"
+    ).to_list()
+    
+    student_ids = [e.user_id for e in all_enrollments]
+    
+    # Get progress data (chỉ của students trong classes)
     progress_list = await Progress.find(
-        Progress.course_id.in_(course_ids),
-        Progress.updated_at >= start_date
+        In(Progress.course_id, course_ids),
+        In(Progress.user_id, student_ids)
     ).to_list()
     
     # Get quiz attempts
     quizzes = await Quiz.find(
-        Quiz.course_id.in_(course_ids)
+        In(Quiz.course_id, course_ids)
     ).to_list()
     
     quiz_ids = [str(q.id) for q in quizzes]
     
     quiz_attempts = await QuizAttempt.find(
-        QuizAttempt.quiz_id.in_(quiz_ids),
+        In(QuizAttempt.quiz_id, quiz_ids),
         QuizAttempt.submitted_at >= start_date
     ).to_list()
     
-    # Group data by date
+    # Group data by date dựa trên lessons_progress completion_date
     date_map = {}
     
-    # Track lessons completed
+    # Track lessons completed theo ngày (parse từ lessons_progress)
     for progress in progress_list:
-        date_key = progress.updated_at.strftime(date_format)
-        
-        if date_key not in date_map:
-            date_map[date_key] = {
-                "lessons_completed": 0,
-                "quizzes_completed": 0,
-                "active_students": set()
-            }
-        
-        date_map[date_key]["lessons_completed"] += progress.completed_lessons_count
-        date_map[date_key]["active_students"].add(progress.user_id)
+        for lesson_prog in progress.lessons_progress:
+            if lesson_prog.get("status") == "completed" and lesson_prog.get("completion_date"):
+                completion_date = lesson_prog["completion_date"]
+                if completion_date >= start_date:
+                    date_key = completion_date.strftime(date_format)
+                    
+                    if date_key not in date_map:
+                        date_map[date_key] = {
+                            "lessons_completed": 0,
+                            "quizzes_completed": 0,
+                            "active_students": set()
+                        }
+                    
+                    date_map[date_key]["lessons_completed"] += 1
+                    date_map[date_key]["active_students"].add(progress.user_id)
     
     # Track quiz attempts
     for attempt in quiz_attempts:
@@ -854,51 +1031,98 @@ async def get_admin_system_dashboard() -> Dict:
     Returns:
         Dict chứa system dashboard data
     """
-    # Users breakdown by role
-    total_users = await User.count()
-    students_count = await User.find(User.role == "student").count()
-    instructors_count = await User.find(User.role == "instructor").count() 
-    admins_count = await User.find(User.role == "admin").count()
+    import logging
+    import traceback
+    logger = logging.getLogger(__name__)
     
-    # Courses breakdown by status
-    total_courses = await Course.count()
-    active_courses = await Course.find(Course.status == "published").count()
-    draft_courses = await Course.find(Course.status == "draft").count()
-    
-    # Enrollments in last 30 days
-    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
-    recent_enrollments = await Enrollment.find(
-        Enrollment.created_at >= thirty_days_ago
-    ).count()
-    
-    # Active users (có activity trong 7 ngày gần đây)
-    seven_days_ago = datetime.utcnow() - timedelta(days=7)
-    active_users = await User.find(
-        User.last_login >= seven_days_ago
-    ).count()
-    
-    # Course completion rate (tính trung bình)
-    all_enrollments = await Enrollment.find().to_list()
-    completed_enrollments = len([e for e in all_enrollments if e.status == "completed"])
-    completion_rate = (completed_enrollments / len(all_enrollments) * 100) if all_enrollments else 0
-    
-    return {
-        "total_users": total_users,
-        "users_by_role": {
-            "students": students_count,
-            "instructors": instructors_count,
-            "admins": admins_count
-        },
-        "total_courses": total_courses,
-        "courses_by_status": {
-            "active": active_courses,
-            "draft": draft_courses
-        },
-        "recent_enrollments": recent_enrollments,
-        "active_users_7d": active_users,
-        "completion_rate": round(completion_rate, 2),
-        "generated_at": datetime.utcnow().isoformat()
-    }
+    try:
+        logger.info("[ADMIN DASHBOARD] Getting system dashboard")
+        
+        # Users breakdown by role
+        total_users = await User.count()
+        logger.info(f"[ADMIN DASHBOARD] Total users: {total_users}")
+        
+        students_count = await User.find(User.role == "student").count()
+        instructors_count = await User.find(User.role == "instructor").count() 
+        admins_count = await User.find(User.role == "admin").count()
+        
+        logger.info(f"[ADMIN DASHBOARD] Students: {students_count}, Instructors: {instructors_count}, Admins: {admins_count}")
+        
+        # Courses breakdown by status
+        total_courses = await Course.count()
+        active_courses = await Course.find(Course.status == "published").count()
+        draft_courses = await Course.find(Course.status == "draft").count()
+        
+        logger.info(f"[ADMIN DASHBOARD] Total courses: {total_courses}, Active: {active_courses}, Draft: {draft_courses}")
+        
+        # Enrollments in last 30 days
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        recent_enrollments = await Enrollment.find(
+            Enrollment.enrolled_at >= thirty_days_ago
+        ).count()
+        
+        logger.info(f"[ADMIN DASHBOARD] Recent enrollments (30d): {recent_enrollments}")
+        
+        # Active users (có activity trong 7 ngày gần đây)
+        seven_days_ago = datetime.utcnow() - timedelta(days=7)
+        active_users = await User.find(
+            User.last_login_at >= seven_days_ago
+        ).count()
+        
+        logger.info(f"[ADMIN DASHBOARD] Active users (7d): {active_users}")
+        
+        # Course completion rate (tính trung bình)
+        all_enrollments = await Enrollment.find().to_list()
+        completed_enrollments = len([e for e in all_enrollments if e.status == "completed"])
+        completion_rate = (completed_enrollments / len(all_enrollments) * 100) if all_enrollments else 0
+        
+        logger.info(f"[ADMIN DASHBOARD] Completion rate: {completion_rate}%")
+        
+        # Class stats
+        from models.models import Class
+        total_classes = await Class.count()
+        active_classes = await Class.find(Class.status == "active").count()
+        completed_classes = await Class.find(Class.status == "completed").count()
+        preparing_classes = await Class.find(Class.status == "preparing").count()
+        
+        logger.info(f"[ADMIN DASHBOARD] Classes - Total: {total_classes}, Active: {active_classes}")
+        
+        result = {
+            "total_users": total_users,
+            "users_by_role": {
+                "students": students_count,
+                "instructors": instructors_count,
+                "admins": admins_count
+            },
+            "total_courses": total_courses,
+            "course_stats": {
+                "public_courses": active_courses,  # Published courses as public
+                "personal_courses": draft_courses,  # Draft as personal for now
+                "published_courses": active_courses,
+                "draft_courses": draft_courses
+            },
+            "total_classes": total_classes,
+            "class_stats": {
+                "active_classes": active_classes,
+                "completed_classes": completed_classes,
+                "preparing_classes": preparing_classes
+            },
+            "activity_stats": {
+                "new_enrollments_this_week": recent_enrollments,  # Using 30d as approximation
+                "quizzes_completed_today": 0,  # TODO: implement
+                "active_users_today": active_users,  # Using 7d as approximation
+                "total_lesson_completions": 0  # TODO: implement
+            },
+            "last_updated": datetime.utcnow()
+        }
+        
+        logger.info(f"[ADMIN DASHBOARD] Successfully generated dashboard")
+        return result
+        
+    except Exception as e:
+        logger.error(f"[ADMIN DASHBOARD] FATAL ERROR: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise
 
 
 async def get_users_growth_analytics(time_range: str, role_filter: Optional[str] = None) -> Dict:
@@ -983,17 +1207,15 @@ async def get_users_growth_analytics(time_range: str, role_filter: Optional[str]
         },
         "generated_at": datetime.utcnow().isoformat()
     }
-
-
 async def get_course_analytics(time_range: str, category_filter: Optional[str] = None) -> Dict:
     """
     Phân tích khóa học chuyên sâu
     
     Business Logic:
-    1. Top courses theo enrollment count
+    1. Top courses theo enrollment count (CHỈ enrollments trong time_range dựa trên enrolled_at)
     2. Completion rates của các khóa học
-    3. Trends tạo khóa học mới
-    4. Performance metrics
+    3. Trends tạo khóa học mới (theo created_at của Course)
+    4. Performance metrics với category filter
     
     Args:
         time_range: "7d", "30d", "90d"
@@ -1011,9 +1233,9 @@ async def get_course_analytics(time_range: str, category_filter: Optional[str] =
     if category_filter:
         course_query["category"] = category_filter
     
-    # Get top courses by enrollment
+    # Get top courses by enrollment (chỉ đếm enrollments trong time_range)
     enrollment_pipeline = [
-        {"$match": {"created_at": {"$gte": start_date}}},
+        {"$match": {"enrolled_at": {"$gte": start_date}}},  # FIX: Sử dụng enrolled_at thay vì created_at
         {"$group": {"_id": "$course_id", "enrollments": {"$sum": 1}}},
         {"$sort": {"enrollments": -1}},
         {"$limit": 10}

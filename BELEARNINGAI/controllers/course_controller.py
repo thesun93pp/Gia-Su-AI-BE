@@ -21,6 +21,7 @@ from schemas.course import (
     ModuleSummary,
     LessonSummary,
     CourseStatistics,
+    EnrollmentInfo,
     CourseEnrollmentStatusResponse
 )
 from schemas.admin import (
@@ -35,9 +36,72 @@ from schemas.admin import (
 
 # Import services
 from services import course_service, enrollment_service
-from models.models import User
+from models.models import User, Course
 
 
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+async def _convert_course_to_search_item(
+    course: Course,
+    user_id: Optional[str] = None
+) -> CourseSearchItem:
+    """
+    Helper function: Convert Course document → CourseSearchItem
+    
+    Args:
+        course: Course document
+        user_id: ID của user (để check enrollment status)
+        
+    Returns:
+        CourseSearchItem với đầy đủ thông tin
+    """
+    # Kiểm tra user đã đăng ký chưa
+    is_enrolled = False
+    if user_id:
+        enrollment = await enrollment_service.get_user_enrollment(
+            user_id=user_id,
+            course_id=course.id
+        )
+        is_enrolled = (enrollment is not None and enrollment.status != "cancelled")
+    
+    # Lấy owner info
+    try:
+        owner = await User.get(course.owner_id)
+        instructor_name = owner.full_name if owner else "Giảng viên"
+        instructor_avatar = owner.avatar_url if owner else None
+    except Exception:
+        # Nếu không tìm thấy owner, dùng denormalized data
+        instructor_name = course.instructor_name or "Giảng viên"
+        instructor_avatar = course.instructor_avatar
+    
+    # Sử dụng thông tin đã denormalized trong Course document
+    # (Module và Lesson là separate collections, không embed)
+    total_modules = course.total_modules
+    total_lessons = course.total_lessons
+    total_duration_minutes = course.total_duration_minutes
+    
+    return CourseSearchItem(
+        id=course.id,
+        title=course.title,
+        description=course.description,
+        category=course.category,
+        level=course.level,
+        thumbnail_url=course.thumbnail_url,
+        total_modules=total_modules,
+        total_lessons=total_lessons,
+        total_duration_minutes=total_duration_minutes,
+        enrollment_count=course.enrollment_count,
+        avg_rating=course.avg_rating,
+        instructor_name=instructor_name,
+        instructor_avatar=instructor_avatar,
+        is_enrolled=is_enrolled,
+        created_at=course.created_at
+    )
+
+
+# ============================================================================
 # ============================================================================
 # Section 2.3.1: TÌM KIẾM KHÓA HỌC
 # ============================================================================
@@ -85,6 +149,13 @@ async def handle_search_courses(
             skip=skip,
             limit=limit
         )
+        # Đếm tổng số courses matching (tối ưu - không load documents)
+        total = await course_service.count_courses(
+            search_term=keyword,
+            category=category,
+            level=level,
+            status="published"
+        )
     else:
         # Không có keyword, lấy danh sách courses với filter
         courses = await course_service.get_courses_list(
@@ -94,82 +165,32 @@ async def handle_search_courses(
             skip=skip,
             limit=limit
         )
-    
-    # Đếm tổng số courses matching filters (for pagination)
-    if keyword:
-        all_courses = await course_service.search_courses(
-            search_term=keyword,
+        # Đếm tổng số courses matching (tối ưu - không load documents)
+        total = await course_service.count_courses(
             category=category,
             level=level,
-            skip=0,
-            limit=10000  # Lấy tất cả để đếm
+            status="published"
         )
-        total = len(all_courses)
-    else:
-        all_courses = await course_service.get_courses_list(
-            category=category,
-            level=level,
-            status="published",
-            skip=0,
-            limit=10000
-        )
-        total = len(all_courses)
     
-    # Chuyển đổi sang CourseSearchItem
+    # Chuyển đổi sang CourseSearchItem bằng helper function
     course_items = []
     for course in courses:
-        # Kiểm tra user đã đăng ký chưa
-        is_enrolled = False
-        if user_id:
-            enrollment = await enrollment_service.get_user_enrollment(
-                user_id=user_id,
-                course_id=course.id
-            )
-            is_enrolled = (enrollment is not None and enrollment.status != "cancelled")
-        
-        # Lấy owner info
-        owner = await User.get(course.owner_id)
-        instructor_name = owner.full_name if owner else "Giảng viên"
-        instructor_avatar = owner.avatar_url if owner else None
-        
-        # Tính tổng modules, lessons, duration
-        total_modules = len(course.modules)
-        total_lessons = sum(len(module.lessons) for module in course.modules)
-        total_duration_minutes = sum(
-            lesson.duration_minutes 
-            for module in course.modules 
-            for lesson in module.lessons
-        )
-        
-        course_items.append(CourseSearchItem(
-            id=course.id,
-            title=course.title,
-            description=course.description,
-            category=course.category,
-            level=course.level,
-            thumbnail_url=course.thumbnail_url,
-            total_modules=total_modules,
-            total_lessons=total_lessons,
-            total_duration_minutes=total_duration_minutes,
-            enrollment_count=course.enrollment_count,
-            avg_rating=course.avg_rating,
-            instructor_name=instructor_name,
-            instructor_avatar=instructor_avatar,
-            is_enrolled=is_enrolled,
-            created_at=course.created_at
-        ))
+        course_item = await _convert_course_to_search_item(course, user_id)
+        course_items.append(course_item)
     
     # Tính thời gian search
     search_end = datetime.utcnow()
     search_time_ms = int((search_end - search_start).total_seconds() * 1000)
     
-    # Tạo metadata
+    # Tạo metadata với filters_applied object
     metadata = SearchMetadata(
         keyword_used=keyword,
-        category_filter=category,
-        level_filter=level,
-        search_time_ms=search_time_ms,
-        total_results=total
+        filters_applied=CourseSearchFilters(
+            category=category,
+            level=level,
+            duration_range=None
+        ),
+        search_time_ms=search_time_ms
     )
     
     return CourseSearchResponse(
@@ -224,71 +245,32 @@ async def handle_list_public_courses(
         limit=limit
     )
     
-    # Đếm tổng số courses published matching filters
-    all_courses = await course_service.get_courses_list(
+    # Đếm tổng số courses published matching filters (tối ưu - không load documents)
+    total = await course_service.count_courses(
         category=category,
         level=level,
-        status="published",
-        skip=0,
-        limit=10000
+        status="published"
     )
-    total = len(all_courses)
     
-    # Chuyển đổi sang CourseSearchItem
+    # Chuyển đổi sang CourseSearchItem bằng helper function
     course_items = []
     for course in courses:
-        # Kiểm tra user đã đăng ký chưa
-        is_enrolled = False
-        if user_id:
-            enrollment = await enrollment_service.get_user_enrollment(
-                user_id=user_id,
-                course_id=course.id
-            )
-            is_enrolled = (enrollment is not None and enrollment.status != "cancelled")
-        
-        # Lấy owner info
-        owner = await User.get(course.owner_id)
-        instructor_name = owner.full_name if owner else "Giảng viên"
-        instructor_avatar = owner.avatar_url if owner else None
-        
-        # Tính tổng modules, lessons, duration
-        total_modules = len(course.modules)
-        total_lessons = sum(len(module.lessons) for module in course.modules)
-        total_duration_minutes = sum(
-            lesson.duration_minutes 
-            for module in course.modules 
-            for lesson in module.lessons
-        )
-        
-        course_items.append(CourseSearchItem(
-            id=course.id,
-            title=course.title,
-            description=course.description,
-            category=course.category,
-            level=course.level,
-            thumbnail_url=course.thumbnail_url,
-            total_modules=total_modules,
-            total_lessons=total_lessons,
-            total_duration_minutes=total_duration_minutes,
-            enrollment_count=course.enrollment_count,
-            avg_rating=course.avg_rating,
-            instructor_name=instructor_name,
-            instructor_avatar=instructor_avatar,
-            is_enrolled=is_enrolled,
-            created_at=course.created_at
-        ))
+        course_item = await _convert_course_to_search_item(course, user_id)
+        course_items.append(course_item)
     
     # Tính thời gian search
     search_end = datetime.utcnow()
     search_time_ms = int((search_end - search_start).total_seconds() * 1000)
     
-    # Tạo metadata
+    # Tạo metadata với filters_applied object
     metadata = SearchMetadata(
         keyword_used=None,
-        category_filter=category,
-        level_filter=level,
-        search_time_ms=search_time_ms,
-        total_results=total
+        filters_applied=CourseSearchFilters(
+            category=category,
+            level=level,
+            duration_range=None
+        ),
+        search_time_ms=search_time_ms
     )
     
     return CourseListResponse(
@@ -342,7 +324,8 @@ async def handle_get_course_detail(
     # Lấy user_id nếu có user đăng nhập
     user_id = current_user.get("user_id") if current_user else None
     
-    # Kiểm tra user đã đăng ký chưa
+    # Kiểm tra user đã đăng ký chưa và lấy thông tin enrollment
+    enrollment = None
     is_enrolled = False
     if user_id:
         enrollment = await enrollment_service.get_user_enrollment(
@@ -352,19 +335,33 @@ async def handle_get_course_detail(
         is_enrolled = (enrollment is not None and enrollment.status != "cancelled")
     
     # Lấy owner info
-    owner = await User.get(course.owner_id)
-    owner_info = OwnerInfo(
-        id=course.owner_id,
-        name=owner.full_name if owner else "Giảng viên",
-        avatar_url=owner.avatar_url if owner else None,
-        role=course.owner_type
-    )
+    try:
+        owner = await User.get(course.owner_id)
+        owner_info = OwnerInfo(
+            id=course.owner_id,
+            name=owner.full_name if owner else "Giảng viên",
+            avatar_url=owner.avatar_url if owner else None,
+            role=course.owner_type
+        )
+    except Exception:
+        owner_info = OwnerInfo(
+            id=course.owner_id,
+            name=course.instructor_name or "Giảng viên",
+            avatar_url=course.instructor_avatar,
+            role=course.owner_type
+        )
     
-    # Chuyển đổi modules và lessons
+    # Lấy modules và lessons từ collections riêng (không embedded)
+    from models.models import Module, Lesson
+    modules = await Module.find(Module.course_id == course.id).sort("+order").to_list()
+    
     modules_summary = []
-    for module in course.modules:
+    for module in modules:
+        # Lấy lessons của module này
+        lessons = await Lesson.find(Lesson.module_id == module.id).sort("+order").to_list()
+        
         lessons_summary = []
-        for lesson in module.lessons:
+        for lesson in lessons:
             # Kiểm tra lesson đã hoàn thành chưa (nếu user đã đăng ký)
             is_completed = False
             if user_id and is_enrolled:
@@ -384,35 +381,32 @@ async def handle_get_course_detail(
                 is_completed=is_completed
             ))
         
-        # Tính estimated_hours cho module
-        total_minutes = sum(lesson.duration_minutes for lesson in module.lessons)
-        estimated_hours = round(total_minutes / 60.0, 1)
-        
         modules_summary.append(ModuleSummary(
             id=module.id,
             title=module.title,
             description=module.description,
             difficulty=module.difficulty,
-            estimated_hours=estimated_hours,
+            estimated_hours=module.estimated_hours,
             lessons=lessons_summary
         ))
     
-    # Tính thống kê
-    total_modules = len(course.modules)
-    total_lessons = sum(len(module.lessons) for module in course.modules)
-    total_duration_minutes = sum(
-        lesson.duration_minutes 
-        for module in course.modules 
-        for lesson in module.lessons
-    )
-    
-    statistics = CourseStatistics(
-        total_modules=total_modules,
-        total_lessons=total_lessons,
-        total_duration_minutes=total_duration_minutes,
+    # Sử dụng thông tin đã denormalized trong Course
+    course_statistics = CourseStatistics(
+        total_modules=course.total_modules,
+        total_lessons=course.total_lessons,
+        total_duration_minutes=course.total_duration_minutes,
         enrollment_count=course.enrollment_count,
         avg_rating=course.avg_rating,
-        completion_rate=0.0  # TODO: Tính từ enrollments completed
+        completion_rate=0.0
+    )
+    
+    # Tạo enrollment_info object
+    enrollment_info = EnrollmentInfo(
+        is_enrolled=is_enrolled,
+        enrollment_id=str(enrollment.id) if enrollment else None,
+        enrolled_at=enrollment.enrolled_at if enrollment else None,
+        progress_percent=enrollment.progress_percent if enrollment else None,
+        can_access_content=is_enrolled
     )
     
     return CourseDetailResponse(
@@ -425,12 +419,12 @@ async def handle_get_course_detail(
         preview_video_url=course.preview_video_url,
         language=course.language,
         status=course.status,
-        owner=owner_info,
+        owner_info=owner_info,
         modules=modules_summary,
         learning_outcomes=course.learning_outcomes,
         prerequisites=course.prerequisites,
-        statistics=statistics,
-        is_enrolled=is_enrolled,
+        course_statistics=course_statistics,
+        enrollment_info=enrollment_info,
         created_at=course.created_at,
         updated_at=course.updated_at
     )
@@ -483,26 +477,22 @@ async def handle_check_course_enrollment_status(
     if not enrollment or enrollment.status == "cancelled":
         # Chưa đăng ký hoặc đã hủy
         return CourseEnrollmentStatusResponse(
-            course_id=course_id,
             is_enrolled=False,
             enrollment_id=None,
             status=None,
-            progress_percent=0.0,
-            enrolled_at=None,
             can_access_content=False,
-            message="Bạn chưa đăng ký khóa học này"
+            enrolled_at=None,
+            progress_percent=0.0
         )
     
     # Đã đăng ký
     return CourseEnrollmentStatusResponse(
-        course_id=course_id,
         is_enrolled=True,
-        enrollment_id=enrollment.id,
+        enrollment_id=str(enrollment.id),
         status=enrollment.status,
-        progress_percent=enrollment.progress_percent,
-        enrolled_at=enrollment.enrolled_at,
         can_access_content=True,
-        message="Bạn đã đăng ký khóa học này"
+        enrolled_at=enrollment.enrolled_at,
+        progress_percent=enrollment.progress_percent or 0.0
     )
 
 

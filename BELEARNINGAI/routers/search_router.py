@@ -20,7 +20,7 @@ from schemas.search import (
 )
 
 
-router = APIRouter(prefix="/api/v1/search", tags=["Search"])
+router = APIRouter(prefix="/search", tags=["Search"])
 
 
 # ============================================================================

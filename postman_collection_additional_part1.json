@@ -1,0 +1,414 @@
+{
+	"info": {
+		"name": "AI Learning Platform - Additional E2E Tests (Part 1)",
+		"description": "8 luồng E2E test bổ sung: E2E-03, E2E-05, E2E-08, E2E-10, E2E-11, E2E-13, E2E-14, E2E-15",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "E2E-03: Cập nhật Profile",
+			"item": [
+				{
+					"name": "Step 1: Get Current Profile",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Profile retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"    var jsonData = pm.response.json();",
+								"    pm.collectionVariables.set('original_name', jsonData.full_name);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{student_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/users/me", "host": ["{{base_url}}"], "path": ["api", "v1", "users", "me"]}
+					}
+				},
+				{
+					"name": "Step 2: Update Profile",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Profile updated', function () {",
+								"    pm.response.to.have.status(200);",
+								"    var jsonData = pm.response.json();",
+								"    pm.expect(jsonData.full_name).to.eql('Updated Name Test');",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "PATCH",
+						"header": [{"key": "Authorization", "value": "Bearer {{student_token}}"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"full_name\": \"Updated Name Test\",\n  \"bio\": \"New bio description\",\n  \"phone\": \"+84912345678\"\n}",
+							"options": {"raw": {"language": "json"}}
+						},
+						"url": {"raw": "{{base_url}}/api/v1/users/me", "host": ["{{base_url}}"], "path": ["api", "v1", "users", "me"]}
+					}
+				}
+			]
+		},
+		{
+			"name": "E2E-05: Retake Assessment",
+			"item": [
+				{
+					"name": "Step 1: Generate First Assessment",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('First assessment generated', function () {",
+								"    pm.response.to.have.status(201);",
+								"    var jsonData = pm.response.json();",
+								"    pm.collectionVariables.set('session_id_1', jsonData.session_id);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Authorization", "value": "Bearer {{student_token}}"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"category\": \"Programming\",\n  \"subject\": \"Python\",\n  \"level\": \"Beginner\"\n}",
+							"options": {"raw": {"language": "json"}}
+						},
+						"url": {"raw": "{{base_url}}/api/v1/assessments/generate", "host": ["{{base_url}}"], "path": ["api", "v1", "assessments", "generate"]}
+					}
+				},
+				{
+					"name": "Step 2: Generate Second Assessment",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Second assessment different', function () {",
+								"    pm.response.to.have.status(201);",
+								"    var jsonData = pm.response.json();",
+								"    pm.expect(jsonData.session_id).to.not.eql(pm.collectionVariables.get('session_id_1'));",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Authorization", "value": "Bearer {{student_token}}"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"category\": \"Programming\",\n  \"subject\": \"Python\",\n  \"level\": \"Beginner\"\n}",
+							"options": {"raw": {"language": "json"}}
+						},
+						"url": {"raw": "{{base_url}}/api/v1/assessments/generate", "host": ["{{base_url}}"], "path": ["api", "v1", "assessments", "generate"]}
+					}
+				}
+			]
+		},
+		{
+			"name": "E2E-08: Quiz Pass/Fail",
+			"item": [
+				{
+					"name": "Step 1: Get Quiz Detail",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Quiz retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"    var jsonData = pm.response.json();",
+								"    pm.expect(jsonData).to.have.property('questions');",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{student_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/quiz/{{quiz_id}}/detail", "host": ["{{base_url}}"], "path": ["api", "v1", "quiz", "{{quiz_id}}", "detail"]}
+					}
+				},
+				{
+					"name": "Step 2: Attempt Quiz",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Quiz submitted', function () {",
+								"    pm.response.to.have.status(200);",
+								"    var jsonData = pm.response.json();",
+								"    pm.collectionVariables.set('attempt_id', jsonData.attempt_id);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Authorization", "value": "Bearer {{student_token}}"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"answers\": [{\"question_id\": \"q1\", \"selected_answer\": \"A\"}],\n  \"total_time_seconds\": 300\n}",
+							"options": {"raw": {"language": "json"}}
+						},
+						"url": {"raw": "{{base_url}}/api/v1/quiz/{{quiz_id}}/attempt", "host": ["{{base_url}}"], "path": ["api", "v1", "quiz", "{{quiz_id}}", "attempt"]}
+					}
+				},
+				{
+					"name": "Step 3: Get Results",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Results retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"    var jsonData = pm.response.json();",
+								"    pm.expect(jsonData).to.have.property('score');",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{student_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/quiz/{{quiz_id}}/results/{{attempt_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "quiz", "{{quiz_id}}", "results", "{{attempt_id}}"]}
+					}
+				}
+			]
+		},
+		{
+			"name": "E2E-10: Chat History",
+			"item": [
+				{
+					"name": "Step 1: Get All Conversations",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Conversations retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"    var jsonData = pm.response.json();",
+								"    if (jsonData.length > 0) {",
+								"        pm.collectionVariables.set('conversation_to_delete', jsonData[0].conversation_id);",
+								"    }",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{student_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/chat/conversations", "host": ["{{base_url}}"], "path": ["api", "v1", "chat", "conversations"]}
+					}
+				},
+				{
+					"name": "Step 2: Delete Conversation",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Conversation deleted', function () {",
+								"    pm.response.to.have.status(200);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "DELETE",
+						"header": [{"key": "Authorization", "value": "Bearer {{student_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/chat/conversations/{{conversation_to_delete}}", "host": ["{{base_url}}"], "path": ["api", "v1", "chat", "conversations", "{{conversation_to_delete}}"]}
+					}
+				}
+			]
+		},
+		{
+			"name": "E2E-13: Student Join Class",
+			"item": [
+				{
+					"name": "Step 1: Join Class with Invite Code",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Joined successfully', function () {",
+								"    pm.response.to.have.status(200);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Authorization", "value": "Bearer {{student_token}}"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"invite_code\": \"{{invite_code}}\"\n}",
+							"options": {"raw": {"language": "json"}}
+						},
+						"url": {"raw": "{{base_url}}/api/v1/classes/join", "host": ["{{base_url}}"], "path": ["api", "v1", "classes", "join"]}
+					}
+				},
+				{
+					"name": "Step 2: Verify in My Classes",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Class in my list', function () {",
+								"    pm.response.to.have.status(200);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{student_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/classes/my-classes", "host": ["{{base_url}}"], "path": ["api", "v1", "classes", "my-classes"]}
+					}
+				}
+			]
+		},
+		{
+			"name": "E2E-14: Instructor View Progress",
+			"item": [
+				{
+					"name": "Step 1: Get Students in Class",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Students list retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"    var jsonData = pm.response.json();",
+								"    if (jsonData.length > 0) {",
+								"        pm.collectionVariables.set('student_in_class_id', jsonData[0].student_id);",
+								"    }",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{instructor_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/classes/{{class_id}}/students", "host": ["{{base_url}}"], "path": ["api", "v1", "classes", "{{class_id}}", "students"]}
+					}
+				},
+				{
+					"name": "Step 2: Get Student Detail",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Student detail retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{instructor_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/classes/{{class_id}}/students/{{student_in_class_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "classes", "{{class_id}}", "students", "{{student_in_class_id}}"]}
+					}
+				},
+				{
+					"name": "Step 3: Get Class Analytics",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Analytics retrieved', function () {",
+								"    pm.response.to.have.status(200);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{instructor_token}}"}],
+						"url": {"raw": "{{base_url}}/api/v1/classes/{{class_id}}/analytics", "host": ["{{base_url}}"], "path": ["api", "v1", "classes", "{{class_id}}", "analytics"]}
+					}
+				}
+			]
+		},
+		{
+			"name": "E2E-15: Create Quiz",
+			"item": [
+				{
+					"name": "Step 1: Create Quiz",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Quiz created', function () {",
+								"    pm.response.to.have.status(201);",
+								"    var jsonData = pm.response.json();",
+								"    pm.collectionVariables.set('created_quiz_id', jsonData.quiz_id);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Authorization", "value": "Bearer {{instructor_token}}"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"lesson_id\": \"{{lesson_id}}\",\n  \"title\": \"Python Quiz\",\n  \"questions\": [{\"question_text\": \"Test?\", \"options\": [\"A\", \"B\"], \"correct_answer\": \"A\", \"points\": 10}],\n  \"passing_score\": 70\n}",
+							"options": {"raw": {"language": "json"}}
+						},
+						"url": {"raw": "{{base_url}}/api/v1/quiz/create", "host": ["{{base_url}}"], "path": ["api", "v1", "quiz", "create"]}
+					}
+				}
+			]
+		},
+		{
+			"name": "E2E-17: Personal Course AI",
+			"item": [
+				{
+					"name": "Step 1: Generate Personal Course",
+					"event": [{
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test('Course generated', function () {",
+								"    pm.response.to.have.status(201);",
+								"    var jsonData = pm.response.json();",
+								"    pm.collectionVariables.set('personal_course_id', jsonData.course_id);",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					}],
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Authorization", "value": "Bearer {{student_token}}"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"prompt\": \"Học Python từ cơ bản đến nâng cao\",\n  \"category\": \"Programming\",\n  \"level\": \"Intermediate\"\n}",
+							"options": {"raw": {"language": "json"}}
+						},
+						"url": {"raw": "{{base_url}}/api/v1/personal-courses/ai-generate", "host": ["{{base_url}}"], "path": ["api", "v1", "personal-courses", "ai-generate"]}
+					}
+				}
+			]
+		}
+	]
+}

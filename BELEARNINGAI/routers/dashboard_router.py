@@ -19,7 +19,7 @@ from schemas.dashboard import (
 )
 
 
-router = APIRouter(prefix="/api/v1/dashboard", tags=["Dashboard"])
+router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 
 @router.get(

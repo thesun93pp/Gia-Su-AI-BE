@@ -95,6 +95,10 @@ async def handle_login(request: LoginRequest) -> LoginResponse:
             detail="Account is inactive"
         )
     
+    # Cập nhật last_login_at
+    user.last_login_at = datetime.utcnow()
+    await user.save()
+    
     # Tạo access token (15 phút)
     access_token = auth_service.create_access_token(
         data={"sub": str(user.id), "email": user.email, "role": user.role}

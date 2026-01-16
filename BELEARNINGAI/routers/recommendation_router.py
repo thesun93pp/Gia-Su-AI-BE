@@ -17,7 +17,7 @@ from schemas.recommendation import (
 )
 
 
-router = APIRouter(prefix="/api/v1/recommendations", tags=["Recommendations"])
+router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
 
 
 @router.get(

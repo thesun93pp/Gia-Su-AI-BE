@@ -43,10 +43,15 @@ async def handle_get_assessment_recommendations(
         HTTPException 404: Assessment không tồn tại
         HTTPException 500: Lỗi khi tạo recommendations
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     user_id = current_user.get("user_id")
+    logger.info(f"Getting assessment recommendations - user: {user_id}, session: {assessment_session_id}")
     
     try:
         # Tìm recommendation hiện có
+        logger.info(f"Searching for existing recommendation...")
         recommendation = await recommendation_service.get_recommendation_by_assessment(
             user_id=user_id,
             assessment_session_id=assessment_session_id
@@ -54,10 +59,14 @@ async def handle_get_assessment_recommendations(
         
         # Nếu chưa có, tạo mới
         if not recommendation:
+            logger.info(f"No existing recommendation found, creating new one...")
             recommendation = await recommendation_service.create_recommendation_from_assessment(
                 user_id=user_id,
                 assessment_session_id=assessment_session_id
             )
+            logger.info(f"Recommendation created - id: {recommendation.id}")
+        else:
+            logger.info(f"Found existing recommendation - id: {recommendation.id}")
         
         # Format response
         recommended_courses = []
@@ -78,12 +87,13 @@ async def handle_get_assessment_recommendations(
                 "relevance_score": course_data.get("relevance_score", 80.0),
                 "reason": course_data.get("reason", "Phù hợp với kết quả đánh giá của bạn"),
                 "addresses_gaps": course_data.get("addresses_gaps", []),
-                "estimated_completion_days": course.estimated_duration_hours * 7 // 2 if course.estimated_duration_hours else 30
+                "estimated_completion_days": course.total_duration_minutes // 60 if course.total_duration_minutes else 30
             })
         
-        # Format learning path
+        # Format learning path - use correct field name
         suggested_learning_order = []
-        for idx, step in enumerate(recommendation.learning_path, start=1):
+        learning_order_data = recommendation.suggested_learning_order if hasattr(recommendation, 'suggested_learning_order') else []
+        for idx, step in enumerate(learning_order_data, start=1):
             suggested_learning_order.append({
                 "step": idx,
                 "course_id": step.get("course_id", ""),
@@ -91,27 +101,29 @@ async def handle_get_assessment_recommendations(
                 "why_this_order": step.get("why_this_order", "")
             })
         
-        # Practice exercises (giả sử có trong recommendation)
-        practice_exercises = []
-        if hasattr(recommendation, 'practice_exercises'):
-            practice_exercises = recommendation.practice_exercises
+        # Practice exercises
+        practice_exercises = recommendation.practice_exercises if hasattr(recommendation, 'practice_exercises') else []
+        
+        logger.info(f"Response formatted - {len(recommended_courses)} courses, {len(suggested_learning_order)} learning steps")
         
         return AssessmentRecommendationResponse(
             assessment_session_id=assessment_session_id,
-            user_proficiency_level=recommendation.proficiency_level if hasattr(recommendation, 'proficiency_level') else "Beginner",
+            user_proficiency_level=recommendation.user_proficiency_level or "Beginner",
             recommended_courses=recommended_courses,
             suggested_learning_order=suggested_learning_order,
             practice_exercises=practice_exercises,
             total_estimated_hours=sum(c["estimated_completion_days"] * 2 for c in recommended_courses),
-            ai_personalized_advice=recommendation.ai_advice
+            ai_personalized_advice=recommendation.ai_personalized_advice or ""
         )
         
     except ValueError as e:
+        logger.warning(f"Assessment recommendation not found - user: {user_id}, session: {assessment_session_id}, error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
     except Exception as e:
+        logger.error(f"Failed to get assessment recommendations - user: {user_id}, session: {assessment_session_id}, error: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi khi lấy đề xuất: {str(e)}"
@@ -141,15 +153,24 @@ async def handle_get_recommendations(current_user: Dict) -> RecommendationRespon
     Raises:
         HTTPException 500: Lỗi khi tạo recommendations
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     user_id = current_user.get("user_id")
+    logger.info(f"Getting general recommendations - user: {user_id}")
     
     try:
         # Tìm recommendation mới nhất chưa expired
+        logger.info("Searching for latest active recommendation...")
         recommendation = await recommendation_service.get_latest_recommendation(user_id)
         
         # Nếu không có hoặc đã expired, tạo mới
         if not recommendation:
+            logger.info("No active recommendation found, creating from learning history...")
             recommendation = await recommendation_service.create_recommendation_from_history(user_id)
+            logger.info(f"Recommendation created from history - id: {recommendation.id}")
+        else:
+            logger.info(f"Found active recommendation - id: {recommendation.id}")
         
         # Format response
         recommended_courses = []

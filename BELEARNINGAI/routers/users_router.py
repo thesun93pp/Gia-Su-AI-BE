@@ -16,7 +16,7 @@ from controllers.user_controller import (
 from middleware.auth import get_current_user
 
 
-router = APIRouter(prefix="/api/v1/users", tags=["Users"])
+router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @router.get(

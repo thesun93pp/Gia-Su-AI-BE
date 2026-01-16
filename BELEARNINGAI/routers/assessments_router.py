@@ -21,7 +21,7 @@ from controllers.assessment_controller import (
 from middleware.auth import get_current_user
 
 
-router = APIRouter(prefix="/api/v1/assessments", tags=["Assessments - AI Dynamic Assessment"])
+router = APIRouter(prefix="/assessments", tags=["Assessments - AI Dynamic Assessment"])
 
 
 @router.post(

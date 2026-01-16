@@ -6,8 +6,8 @@ Tuân thủ: CHUCNANG.md Section 2.3, 2.5, 3.1
 
 from datetime import datetime
 from typing import Optional, List
-from models.models import Course, Module, Lesson, Enrollment
-from beanie.operators import In, RegEx
+from models.models import Course, Module, Lesson, Enrollment, EmbeddedModule, EmbeddedLesson
+from beanie.operators import In, RegEx, Or
 
 
 # ============================================================================
@@ -203,7 +203,11 @@ async def add_module_to_course(
     if not course:
         return None
     
-    new_module = Module(
+    # Initialize modules list if not exists
+    if not hasattr(course, 'modules'):
+        course.modules = []
+    
+    new_module = EmbeddedModule(
         title=title,
         description=description,
         order=order,
@@ -238,6 +242,10 @@ async def update_module_in_course(
     course = await get_course_by_id(course_id)
     
     if not course:
+        return None
+    
+    # Check if course has modules
+    if not hasattr(course, 'modules') or not course.modules:
         return None
     
     # Tìm module
@@ -313,10 +321,18 @@ async def add_lesson_to_module(
     if not course:
         return None
     
+    # Check if course has modules
+    if not hasattr(course, 'modules') or not course.modules:
+        return None
+    
     # Tìm module
     for module in course.modules:
         if module.id == module_id:
-            new_lesson = Lesson(
+            # Initialize lessons list if not exists
+            if not hasattr(module, 'lessons'):
+                module.lessons = []
+            
+            new_lesson = EmbeddedLesson(
                 title=title,
                 order=order,
                 content=content,
@@ -356,9 +372,16 @@ async def update_lesson_in_module(
     if not course:
         return None
     
+    # Check if course has modules
+    if not hasattr(course, 'modules') or not course.modules:
+        return None
+    
     # Tìm module và lesson
     for module in course.modules:
         if module.id == module_id:
+            if not hasattr(module, 'lessons') or not module.lessons:
+                continue
+            
             for lesson in module.lessons:
                 if lesson.id == lesson_id:
                     if title is not None:
@@ -395,10 +418,15 @@ async def delete_lesson_from_module(
     if not course:
         return None
     
+    # Check if course has modules
+    if not hasattr(course, 'modules') or not course.modules:
+        return None
+    
     # Tìm module và xóa lesson
     for module in course.modules:
         if module.id == module_id:
-            module.lessons = [l for l in module.lessons if l.id != lesson_id]
+            if hasattr(module, 'lessons') and module.lessons:
+                module.lessons = [l for l in module.lessons if l.id != lesson_id]
             break
     
     course.updated_at = datetime.utcnow()
@@ -409,6 +437,58 @@ async def delete_lesson_from_module(
 # ============================================================================
 # SEARCH & FILTER
 # ============================================================================
+
+async def count_courses(
+    category: Optional[str] = None,
+    level: Optional[str] = None,
+    status: Optional[str] = None,
+    owner_id: Optional[str] = None,
+    search_term: Optional[str] = None
+) -> int:
+    """
+    Đếm số lượng courses matching filters (không load documents)
+    
+    Args:
+        category: Filter theo category
+        level: Filter theo level
+        status: Filter theo status
+        owner_id: Filter theo owner
+        search_term: Tìm kiếm trong title và description (regex)
+        
+    Returns:
+        Số lượng courses matching
+    """
+    conditions = []
+    
+    # Nếu có search_term, tìm trong title HOẶC description
+    if search_term:
+        search_conditions = Or(
+            RegEx(Course.title, search_term, "i"),
+            RegEx(Course.description, search_term, "i")
+        )
+        conditions.append(search_conditions)
+    
+    if category:
+        conditions.append(Course.category == category)
+    
+    if level:
+        conditions.append(Course.level == level)
+    
+    if status:
+        conditions.append(Course.status == status)
+    
+    if owner_id:
+        conditions.append(Course.owner_id == owner_id)
+    
+    # Gọi find() với tất cả điều kiện cùng lúc
+    if conditions:
+        query = Course.find(*conditions)
+    else:
+        query = Course.find()
+    
+    count = await query.count()
+    return count
+
 
 async def search_courses(
     search_term: str,
@@ -428,10 +508,21 @@ async def search_courses(
         limit: Pagination limit
         
     Returns:
-        List Course documents matching search
+        List Course documents matching search (chỉ published courses)
     """
-    query = Course.find(Course.title.regex(search_term, "i"))
+    # Xây dựng điều kiện tìm kiếm: title HOẶC description chứa search_term (không phân biệt hoa thường)
+    search_conditions = Or(
+        RegEx(Course.title, search_term, "i"),
+        RegEx(Course.description, search_term, "i")
+    )
     
+    # Kết hợp với điều kiện status = published
+    query = Course.find(
+        search_conditions,
+        Course.status == "published"
+    )
+    
+    # Thêm filter nếu có
     if category:
         query = query.find(Course.category == category)
     
@@ -746,7 +837,15 @@ async def create_course_admin(
         preview_video_url=preview_video_url,
         prerequisites=prerequisites or [],
         learning_outcomes=learning_outcomes or [],
-        status=status
+        status=status,
+        # Thêm các trường bắt buộc còn thiếu
+        modules=[],
+        total_modules=0,
+        total_lessons=0,
+        total_duration_minutes=0,
+        enrollment_count=0,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow()
     )
     
     await course.insert()
@@ -888,14 +987,13 @@ async def delete_course_admin(course_id: str) -> dict:
     # 3. Personal courses derived from this
     personal_courses = await Course.find(
         Course.owner_type != "admin"
-        # TODO: Track "base_course_id" if personal courses fork from public
     ).count()
     
     # Build impact analysis
     impact = {
         "enrolled_students": enrolled_students,
         "active_classes": len(classes_using),
-        "personal_courses_derived": 0,  # Would need tracking
+        "personal_courses_derived": 0,
         "warning": ""
     }
     

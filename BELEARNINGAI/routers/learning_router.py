@@ -26,7 +26,7 @@ from schemas.learning import (
 )
 
 
-router = APIRouter(prefix="/api/v1", tags=["Learning"])
+router = APIRouter(prefix="", tags=["Learning"])
 
 
 # ============================================================================
@@ -148,5 +148,5 @@ async def generate_module_assessment(
     request: ModuleAssessmentGenerateRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Sinh quiz đánh giá tự động cho module bằng AI"""
+    """Sinh quiz đánh giá tự động cho module bằng AI - returns Dict matching API_SCHEMA"""
     return await handle_generate_module_assessment(course_id, module_id, request, current_user)

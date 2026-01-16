@@ -6,7 +6,7 @@ Tuân thủ: CHUCNANG.md Section 2.4, ENDPOINTS.md learning_router
 
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 
 # ============================================================================
@@ -20,6 +20,7 @@ class LessonSummaryInModule(BaseModel):
     order: int = Field(..., description="Thứ tự lesson trong module")
     duration_minutes: int = Field(..., description="Thời lượng ước tính (phút)")
     content_type: str = Field(..., description="text|video|mixed")
+    has_quiz: bool = Field(False, description="Có quiz kèm theo không")
     is_completed: bool = Field(..., description="Trạng thái hoàn thành của user hiện tại")
     is_locked: bool = Field(False, description="Bị khóa do chưa hoàn thành lesson trước")
 
@@ -38,8 +39,8 @@ class ResourceItem(BaseModel):
     title: str = Field(..., description="Tên tài nguyên")
     type: str = Field(..., description="pdf|slide|code|video|link")
     url: str = Field(..., description="Link download/view")
-    size_mb: Optional[float] = Field(None, description="Kích thước file (MB)")
-    description: Optional[str] = Field(None, description="Mô tả ngắn")
+    size_mb: float = Field(0.0, description="Kích thước file (MB), default 0")
+    description: str = Field("", description="Mô tả ngắn, default empty string")
 
 
 class ModuleDetailResponse(BaseModel):
@@ -67,9 +68,10 @@ class ModuleDetailResponse(BaseModel):
     
     # Trạng thái của user hiện tại
     completion_status: str = Field(..., description="not-started|in-progress|completed")
-    completed_lessons_count: int = Field(..., description="Số lessons đã hoàn thành")
-    total_lessons_count: int = Field(..., description="Tổng số lessons")
+    completed_lessons: int = Field(..., description="Số lessons đã hoàn thành")
+    total_lessons: int = Field(..., description="Tổng số lessons")
     progress_percent: float = Field(..., description="% hoàn thành (0-100)")
+    is_accessible: bool = Field(..., description="Module có thể truy cập (không bị khóa)")
     
     # Prerequisites
     prerequisites: List[str] = Field(default_factory=list, description="Danh sách module IDs tiên quyết")
@@ -85,7 +87,7 @@ class AttachmentFile(BaseModel):
     filename: str = Field(..., description="Tên file")
     file_type: str = Field(..., description="pdf|docx|code|other")
     url: str = Field(..., description="Link download")
-    size_mb: float = Field(..., description="Kích thước file (MB)")
+    size_mb: float = Field(0.0, description="Kích thước file (MB), default 0 nếu không rõ")
 
 
 class VideoInfo(BaseModel):
@@ -96,15 +98,39 @@ class VideoInfo(BaseModel):
     quality: List[str] = Field(default_factory=lambda: ["360p", "720p", "1080p"], description="Chất lượng có sẵn")
 
 
+class NavigationLesson(BaseModel):
+    """Thông tin lesson trong navigation - tuân thủ API_SCHEMA.md"""
+    id: Optional[str] = Field(None, description="UUID lesson (null nếu không có)")
+    title: Optional[str] = Field(None, description="Tiêu đề lesson (null nếu không có)")
+    is_locked: Optional[bool] = Field(None, description="Bị khóa hay không (chỉ cho next_lesson)")
+
+
+class QuizInfoInLesson(BaseModel):
+    """Thông tin quiz kèm theo lesson - tuân thủ API_SCHEMA.md"""
+    quiz_id: Optional[str] = Field(None, description="UUID quiz (null nếu has_quiz=false)")
+    question_count: Optional[int] = Field(None, description="Số câu hỏi (null nếu has_quiz=false)")
+    is_mandatory: Optional[bool] = Field(None, description="Bắt buộc làm quiz để tiếp tục (null nếu has_quiz=false)")
+
+
+class CompletionStatusInLesson(BaseModel):
+    """Trạng thái hoàn thành của lesson - tuân thủ API_SCHEMA.md"""
+    is_completed: bool = Field(False, description="Đã hoàn thành chưa")
+    completion_date: Optional[datetime] = Field(None, description="Ngày hoàn thành (null nếu chưa xong)")
+    time_spent_minutes: int = Field(0, description="Thời gian đã học (phút)")
+    video_progress_percent: Optional[float] = Field(None, description="0-100, tiến độ xem video (null nếu không có video)")
+
+
 class LessonContentResponse(BaseModel):
     """
     Response cho GET /api/v1/courses/{course_id}/lessons/{lesson_id}
     Section 2.4.2: Xem nội dung bài học
+    FIXED: Tuân thủ API_SCHEMA.md Section 4.2 với navigation và quiz_info nested
     """
     id: str = Field(..., description="UUID của lesson")
+    course_id: str = Field(..., description="UUID của khóa học")
     title: str = Field(..., description="Tiêu đề lesson")
-    module_id: str = Field(..., description="UUID của module cha")
-    module_title: str = Field(..., description="Tên module")
+    module_id: Optional[str] = Field(None, description="UUID của module cha")
+    module_title: Optional[str] = Field(None, description="Tên module")
     order: int = Field(..., description="Thứ tự lesson")
     duration_minutes: int = Field(..., description="Thời lượng ước tính")
     
@@ -114,24 +140,29 @@ class LessonContentResponse(BaseModel):
     video_info: Optional[VideoInfo] = Field(None, description="Thông tin video nếu có")
     attachments: List[AttachmentFile] = Field(default_factory=list, description="Tài liệu đính kèm")
     
-    # Navigation
-    previous_lesson_id: Optional[str] = Field(None, description="UUID lesson trước")
-    next_lesson_id: Optional[str] = Field(None, description="UUID lesson tiếp theo")
-    is_next_locked: bool = Field(False, description="Lesson tiếp bị khóa do chưa pass quiz")
+    # Learning objectives - ADDED theo API_SCHEMA.md
+    learning_objectives: List[str] = Field(default_factory=list, description="Mục tiêu cụ thể của bài học này")
     
-    # Tracking thông tin của user
-    is_completed: bool = Field(False, description="User đã hoàn thành chưa")
-    last_accessed_at: Optional[datetime] = Field(None, description="Lần truy cập cuối")
-    time_spent_seconds: int = Field(0, description="Tổng thời gian đã học (giây)")
-    video_progress_seconds: int = Field(0, description="Tiến độ xem video (giây)")
+    # Resources - ADDED theo API_SCHEMA.md
+    resources: List[ResourceItem] = Field(default_factory=list, description="Tài nguyên học tập")
     
-    # Quiz liên kết
-    quiz_id: Optional[str] = Field(None, description="UUID quiz kèm theo (nếu có)")
-    quiz_passed: bool = Field(False, description="Đã pass quiz chưa")
-    quiz_required: bool = Field(True, description="Có bắt buộc phải pass quiz không")
+    # Navigation - FIXED: Nested objects theo API_SCHEMA.md
+    navigation: Dict = Field(..., description="Navigation info with previous_lesson and next_lesson objects")
+    # Structure: {
+    #   "previous_lesson": {"id": str|null, "title": str|null},
+    #   "next_lesson": {"id": str|null, "title": str|null, "is_locked": bool}
+    # }
     
-    # Message
-    message: Optional[str] = Field(None, description="Thông báo cho user, vd: 'Bạn cần hoàn thành quiz để mở lesson tiếp theo'")
+    # Quiz info - FIXED: Nested object theo API_SCHEMA.md (Dict để accept service response)
+    has_quiz: bool = Field(False, description="Bài học có quiz kèm theo không")
+    quiz_info: Dict = Field(..., description="Thông tin quiz kèm theo: {quiz_id: str|null, question_count: int|null, is_mandatory: bool|null}")
+    
+    # Completion status - FIXED: Nested object theo API_SCHEMA.md (Dict để accept service response)
+    completion_status: Dict = Field(..., description="Trạng thái hoàn thành: {is_completed: bool, completion_date: datetime|null, time_spent_minutes: int, video_progress_percent: float|null}")
+    
+    # Timestamps
+    created_at: datetime = Field(..., description="Ngày tạo")
+    updated_at: datetime = Field(..., description="Ngày cập nhật")
 
 
 # ============================================================================
@@ -142,12 +173,17 @@ class ModuleListItem(BaseModel):
     """Item trong danh sách modules"""
     id: str = Field(..., description="UUID")
     title: str = Field(..., description="Tiêu đề module")
+    description: str = Field("", description="Mô tả module")
     difficulty: str = Field(..., description="Basic|Intermediate|Advanced")
     order: int = Field(..., description="Thứ tự")
     lesson_count: int = Field(..., description="Số lượng lessons")
+    total_lessons: int = Field(..., description="Tổng số lessons")
+    completed_lessons: int = Field(0, description="Số lessons đã hoàn thành")
     estimated_hours: float = Field(..., description="Thời lượng ước tính")
     progress_percent: float = Field(0.0, description="% hoàn thành của user")
+    is_accessible: bool = Field(True, description="Có thể truy cập hay không")
     is_locked: bool = Field(False, description="Bị khóa do chưa hoàn thành module trước")
+    status: str = Field("not-started", description="not-started|in-progress|completed")
 
 
 class CourseModulesResponse(BaseModel):
@@ -172,6 +208,10 @@ class ModuleOutcomesResponse(BaseModel):
     learning_outcomes: List[LearningOutcome] = Field(..., description="Danh sách outcomes")
     total_outcomes: int = Field(..., description="Tổng số outcomes")
     achieved_outcomes: int = Field(0, description="Số outcomes đã đạt được")
+    completion_status: str = Field(..., description="not-started|in-progress|completed")
+    overall_score: float = Field(0.0, description="Điểm trung bình (0-100)")
+    skills_acquired: List[str] = Field(default_factory=list, description="Các skill tags đã đạt")
+    areas_for_improvement: List[str] = Field(default_factory=list, description="Các khu vực cần cải thiện")
 
 
 class ModuleResourcesResponse(BaseModel):
@@ -183,25 +223,37 @@ class ModuleResourcesResponse(BaseModel):
     module_title: str = Field(..., description="Tên module")
     resources: List[ResourceItem] = Field(..., description="Danh sách tài nguyên")
     total_resources: int = Field(..., description="Tổng số tài nguyên")
-    resources_by_type: dict = Field(..., description="Số lượng theo từng type")
+    mandatory_resources: int = Field(0, description="Số tài nguyên bắt buộc")
+    resource_categories: List[str] = Field(default_factory=list, description="Các loại tài nguyên")
+    resources_by_type: Dict[str, int] = Field(..., description="Số lượng theo từng type")
 
 
 class ModuleAssessmentGenerateRequest(BaseModel):
     """
     Request cho POST /api/v1/courses/{course_id}/modules/{module_id}/assessments/generate
     Sinh quiz đánh giá tự động cho module
+    Tuân thủ API_SCHEMA.md
     """
-    difficulty: str = Field("medium", description="easy|medium|hard")
-    question_count: int = Field(10, ge=5, le=30, description="Số câu hỏi muốn sinh")
-    include_mandatory: bool = Field(True, description="Có bao gồm câu điểm liệt không")
-    focus_outcomes: Optional[List[str]] = Field(None, description="Danh sách outcome IDs cần tập trung")
+    assessment_type: str = Field("practice", description="review|practice|final_check")
+    question_count: Optional[int] = Field(10, ge=5, le=15, description="Số câu hỏi muốn sinh (5-15)")
+    difficulty_preference: Optional[str] = Field("mixed", description="easy|mixed|hard")
+    focus_topics: Optional[List[str]] = Field(None, description="Danh sách skill tags cần tập trung")
+    time_limit_minutes: Optional[int] = Field(15, description="Thời gian làm bài (phút)")
 
 
 class ModuleAssessmentGenerateResponse(BaseModel):
-    """Response cho endpoint sinh quiz module"""
-    quiz_id: str = Field(..., description="UUID quiz vừa tạo")
+    """Response cho endpoint sinh quiz module - tuân thủ API_SCHEMA.md"""
+    assessment_id: str = Field(..., description="UUID bài kiểm tra được tạo")
     module_id: str = Field(..., description="UUID module")
-    question_count: int = Field(..., description="Số câu hỏi đã sinh")
-    difficulty: str = Field(..., description="Độ khó")
-    estimated_time_minutes: int = Field(..., description="Thời gian làm bài ước tính")
+    module_title: str = Field(..., description="Tiêu đề module")
+    assessment_type: str = Field(..., description="review|practice|final_check")
+    question_count: int = Field(..., description="Số câu hỏi thực tế")
+    time_limit_minutes: int = Field(..., description="Thời gian làm bài")
+    total_points: int = Field(..., description="Tổng điểm tối đa")
+    pass_threshold: int = Field(..., description="Điểm pass tối thiểu (thường 70%)")
+    questions: List[Dict] = Field(..., description="Danh sách câu hỏi chi tiết")
+    instructions: str = Field(..., description="Hướng dẫn làm bài")
+    created_at: datetime = Field(..., description="Thời gian tạo")
+    expires_at: datetime = Field(..., description="Thời hạn làm bài")
+    can_retake: bool = Field(..., description="Có thể làm lại hay không")
     message: str = Field(..., description="Thông báo")

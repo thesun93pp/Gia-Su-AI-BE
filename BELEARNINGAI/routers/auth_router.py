@@ -17,7 +17,7 @@ from controllers.auth_controller import (
 from middleware.auth import get_current_user
 
 
-router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post(

@@ -6,6 +6,7 @@ Tuân thủ: CHUCNANG.md Section 2.3.4-2.3.8, 2.4
 
 from datetime import datetime
 from typing import Optional, List
+from beanie.operators import In
 from models.models import Enrollment, Progress, Course
 
 
@@ -25,17 +26,45 @@ async def create_enrollment(user_id: str, course_id: str) -> Enrollment:
         Enrollment document đã tạo
         
     Raises:
-        ValueError: Nếu user đã đăng ký course này rồi
+        ValueError: Nếu user đã đăng ký course này rồi (và chưa hủy)
     """
-    # Kiểm tra đã đăng ký chưa
+    # Kiểm tra đã đăng ký chưa (chỉ check status active/completed, không check cancelled)
     existing = await Enrollment.find_one(
         Enrollment.user_id == user_id,
-        Enrollment.course_id == course_id
+        Enrollment.course_id == course_id,
+        In(Enrollment.status, ["active", "completed"])
     )
     
     if existing:
-        raise ValueError("User đã đăng ký khóa học này rồi")
+        raise ValueError("Bạn đã đăng ký khóa học này rồi")
     
+    # Kiểm tra có enrollment bị cancelled không - nếu có thì tái kích hoạt
+    cancelled_enrollment = await Enrollment.find_one(
+        Enrollment.user_id == user_id,
+        Enrollment.course_id == course_id,
+        Enrollment.status == "cancelled"
+    )
+    
+    if cancelled_enrollment:
+        # Tái kích hoạt enrollment cũ
+        cancelled_enrollment.status = "active"
+        cancelled_enrollment.enrolled_at = datetime.utcnow()
+        # Reset progress về 0 cho enrollment mới
+        cancelled_enrollment.progress_percent = 0.0
+        cancelled_enrollment.completed_lessons = []
+        cancelled_enrollment.completed_modules = []
+        cancelled_enrollment.last_accessed_at = datetime.utcnow()
+        await cancelled_enrollment.save()
+        
+        # Tăng enrollment_count của course
+        course = await Course.get(course_id)
+        if course:
+            course.enrollment_count += 1
+            await course.save()
+        
+        return cancelled_enrollment
+    
+    # Tạo enrollment mới
     enrollment = Enrollment(
         user_id=user_id,
         course_id=course_id,
@@ -217,7 +246,7 @@ async def mark_lesson_completed(
     
     # Tính lại progress
     course = await Course.get(course_id)
-    if course:
+    if course and hasattr(course, 'modules') and course.modules:
         total_lessons = sum(len(module.lessons) for module in course.modules)
         if total_lessons > 0:
             enrollment.progress_percent = (
@@ -294,7 +323,7 @@ async def get_or_create_progress(
     # Tạo progress mới
     course = await Course.get(course_id)
     total_lessons = 0
-    if course:
+    if course and hasattr(course, 'modules') and course.modules:
         total_lessons = sum(len(module.lessons) for module in course.modules)
     
     progress = Progress(
@@ -379,16 +408,36 @@ async def update_lesson_progress(
     progress.updated_at = datetime.utcnow()
     
     await progress.save()
-    
     # Đồng bộ với enrollment
     await update_enrollment_progress(
         enrollment.id,
         progress_percent=progress.overall_progress_percent,
         completed_lessons=[
-            e["lesson_id"] for e in progress.lessons_progress 
+            e["lesson_id"] for e in progress.lessons_progress
             if e.get("status") == "completed"
         ]
     )
+
+    # ADAPTIVE LEARNING: Trigger tracking nếu lesson completed
+    if status == "completed" and enrollment.adaptive_learning_enabled:
+        try:
+            from services.adaptive_learning_service import adaptive_learning_service
+
+            # Track và check adjustment (không block nếu fail)
+            await adaptive_learning_service.track_and_adjust(
+                user_id=user_id,
+                course_id=course_id,
+                lesson_id=lesson_id,
+                completion_data={
+                    "time_spent_seconds": time_spent_seconds,
+                    "quiz_score": lesson_entry.get("quiz_score") if lesson_entry else None,
+                    "attempts": lesson_entry.get("attempts", 1) if lesson_entry else 1,
+                    "completed_at": datetime.utcnow()
+                }
+            )
+        except Exception as e:
+            # Log error nhưng không fail request
+            print(f"Adaptive learning tracking error: {e}")
     
     return progress
 

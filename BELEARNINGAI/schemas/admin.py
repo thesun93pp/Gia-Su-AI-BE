@@ -14,19 +14,26 @@ class AdminUserListItem(BaseModel):
     email: str
     avatar: Optional[str] = None
     role: str = Field(..., description="student|instructor|admin")
-    status: str = Field(..., description="active|inactive")
+    status: str = Field(..., description="active|inactive|banned")
     created_at: datetime
-    last_login: Optional[datetime] = None
-    enrollment_count: Optional[int] = Field(None, description="For student")
-    class_count: Optional[int] = Field(None, description="For instructor")
+    last_login_at: Optional[datetime] = None
+    courses_enrolled: Optional[int] = Field(None, description="For student only")
+    classes_created: Optional[int] = Field(None, description="For instructor only")
+
+
+class UserSummary(BaseModel):
+    total_users: int
+    active_users: int
+    new_users_this_month: int
 
 
 class AdminUserListResponse(BaseModel):
+    summary: Optional[str] = None
     data: List[AdminUserListItem]
     total: int
     skip: int
     limit: int
-    has_next: bool
+    
 
 
 class UserStatistics(BaseModel):

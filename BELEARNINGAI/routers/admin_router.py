@@ -3,26 +3,29 @@ Admin Router
 Định nghĩa routes cho admin management endpoints
 Section 4.1: User Management (7 endpoints)
 Section 4.2: Course Management (5 endpoints)
+Section 4.3: Class Management (2 endpoints)
+Section 4.4: Admin Analytics (3 endpoints)
+Tổng: 17 endpoints
 """
 
 from fastapi import APIRouter, Depends, status, Query
 from typing import Optional
 from middleware.auth import get_current_user
-from controllers.user_controller import (
+from controllers.admin_controller import (
     handle_list_users_admin,
     handle_get_user_detail_admin,
     handle_create_user_admin,
     handle_update_user_admin,
     handle_delete_user_admin,
     handle_change_user_role_admin,
-    handle_reset_user_password_admin
-)
-from controllers.course_controller import (
+    handle_reset_user_password_admin,
     handle_list_courses_admin,
     handle_get_course_detail_admin,
     handle_create_course_admin,
     handle_update_course_admin,
-    handle_delete_course_admin
+    handle_delete_course_admin,
+    handle_list_classes_admin,
+    handle_get_class_detail_admin
 )
 from schemas.admin import (
     AdminUserListResponse,
@@ -48,7 +51,7 @@ from schemas.admin import (
 )
 
 
-router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
+router = APIRouter(prefix="/admin", tags=["Admin"])
 
 
 # ============================================================================
@@ -64,8 +67,8 @@ router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 )
 async def list_users_admin(
     role: Optional[str] = Query(None, description="Filter role: student|instructor|admin"),
-    status_param: Optional[str] = Query(None, alias="status", description="Filter status: active|inactive"),
-    search: Optional[str] = Query(None, description="Search tên hoặc email"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter status: active|inactive"),
+    keyword: Optional[str] = Query(None, description="Search tên hoặc email"),
     sort_by: str = Query("created_at", description="Field sort"),
     sort_order: str = Query("desc", description="asc|desc"),
     skip: int = Query(0, ge=0),
@@ -76,8 +79,8 @@ async def list_users_admin(
     return await handle_list_users_admin(
         current_user=current_user,
         role=role,
-        status=status_param,
-        search=search,
+        status_filter=status_filter,
+        keyword=keyword,
         sort_by=sort_by,
         sort_order=sort_order,
         skip=skip,
@@ -194,7 +197,7 @@ async def list_courses_admin(
     status_param: Optional[str] = Query(None, alias="status", description="draft|published|archived"),
     category: Optional[str] = Query(None, description="Filter category"),
     course_type: Optional[str] = Query(None, description="public|personal"),
-    search: Optional[str] = Query(None, description="Search tên course"),
+    keyword: Optional[str] = Query(None, description="Search tên course"),
     sort_by: str = Query("created_at", description="Field sort"),
     sort_order: str = Query("desc", description="asc|desc"),
     skip: int = Query(0, ge=0),
@@ -208,7 +211,7 @@ async def list_courses_admin(
         status=status_param,
         category=category,
         course_type=course_type,
-        search=search,
+        keyword=keyword,
         sort_by=sort_by,
         sort_order=sort_order,
         skip=skip,
@@ -299,7 +302,6 @@ async def list_classes_admin(
     current_user: dict = Depends(get_current_user)
 ):
     """Section 4.3.1 - Danh sách lớp học (Admin)"""
-    from controllers.admin_controller import handle_list_classes_admin
     return await handle_list_classes_admin(
         page, limit, search, instructor_filter, status_filter, 
         sort_by, sort_order, current_user
@@ -318,6 +320,55 @@ async def get_class_detail_admin(
     current_user: dict = Depends(get_current_user)
 ):
     """Section 4.3.2 - Chi tiết lớp học (Admin)"""
-    from controllers.admin_controller import handle_get_class_detail_admin
     return await handle_get_class_detail_admin(class_id, current_user)
+
+
+# ============================================================================
+# ADMIN ANALYTICS (Section 4.4.2-4.4.4)
+# ============================================================================
+
+@router.get(
+    "/analytics/users-growth",
+    status_code=status.HTTP_200_OK,
+    summary="Thống kê tăng trưởng người dùng",
+    description="Phân tích tăng trưởng người dùng theo thời gian với breakdown theo role"
+)
+async def get_users_growth_analytics(
+    time_range: str = Query("30d", regex="^(7d|30d|90d)$", description="Khoảng thời gian"),
+    role_filter: Optional[str] = Query(None, description="Lọc theo role cụ thể"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Section 4.4.2 - Thống kê tăng trưởng người dùng (Admin)"""
+    from controllers.dashboard_controller import handle_get_users_growth_analytics
+    return await handle_get_users_growth_analytics(time_range, role_filter, current_user)
+
+
+@router.get(
+    "/analytics/courses",
+    status_code=status.HTTP_200_OK,
+    summary="Phân tích khóa học chuyên sâu",
+    description="Analytics khóa học: top courses, completion rates, creation trends"
+)
+async def get_course_analytics(
+    time_range: str = Query("30d", regex="^(7d|30d|90d)$", description="Khoảng thời gian"),
+    category_filter: Optional[str] = Query(None, description="Lọc theo danh mục"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Section 4.4.3 - Phân tích khóa học (Admin)"""
+    from controllers.dashboard_controller import handle_get_course_analytics
+    return await handle_get_course_analytics(time_range, category_filter, current_user)
+
+
+@router.get(
+    "/analytics/system-health",
+    status_code=status.HTTP_200_OK,
+    summary="Giám sát sức khỏe hệ thống",
+    description="Metrics hệ thống: database, performance, alerts, utilization"
+)
+async def get_system_health(
+    current_user: dict = Depends(get_current_user)
+):
+    """Section 4.4.4 - Giám sát sức khỏe hệ thống (Admin)"""
+    from controllers.dashboard_controller import handle_get_system_health
+    return await handle_get_system_health(current_user)
 

@@ -4,7 +4,7 @@ Personal Courses Schemas
 Section 2.5.1-2.5.5
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from datetime import datetime
 from typing import List, Optional
 
@@ -17,18 +17,43 @@ class CourseFromPromptRequest(BaseModel):
     """Request tạo khóa học từ AI prompt"""
     prompt: str = Field(
         ..., 
-        min_length=10,
+        min_length=20,
         max_length=1000,
         description="Mô tả bằng ngôn ngữ tự nhiên về chủ đề và mục tiêu học tập"
     )
-    category: Optional[str] = Field(
-        None,
-        description="Danh mục khóa học (Programming, Math, Business, Languages...)"
-    )
     level: Optional[str] = Field(
-        None,
+        "Beginner",
         description="Cấp độ khóa học (Beginner, Intermediate, Advanced)"
     )
+    estimated_duration_weeks: Optional[int] = Field(
+        4,
+        description="Thời lượng học tập ước tính (tuần)"
+    )
+    language: Optional[str] = Field(
+        "vi",
+        description="Ngôn ngữ khóa học (vi, en)"
+    )
+    
+    @validator('level')
+    def validate_level(cls, v):
+        """Validate level must be one of the allowed values"""
+        if v and v not in ["Beginner", "Intermediate", "Advanced"]:
+            raise ValueError("Level must be one of: Beginner, Intermediate, Advanced")
+        return v
+
+
+class GeneratedLesson(BaseModel):
+    """Lesson được AI sinh ra"""
+    id: str = Field(..., description="UUID của lesson")
+    title: str = Field(..., description="Tiêu đề lesson")
+    order: int = Field(..., description="Thứ tự lesson")
+    content_outline: str = Field(..., description="Outline nội dung chính")
+
+
+class LearningOutcome(BaseModel):
+    """Learning outcome structure - khớp với API_SCHEMA"""
+    description: str = Field(..., description="Mục tiêu cụ thể, đo lường được")
+    skill_tag: str = Field(..., description="Kỹ năng liên quan")
 
 
 class GeneratedModule(BaseModel):
@@ -37,34 +62,34 @@ class GeneratedModule(BaseModel):
     title: str = Field(..., description="Tiêu đề module")
     description: str = Field(..., description="Mô tả module")
     order: int = Field(..., description="Thứ tự module")
-    estimated_hours: float = Field(..., description="Thời gian học ước tính (giờ)")
-    learning_outcomes: List[str] = Field(
+    difficulty: str = Field("Basic", description="Độ khó (Basic, Intermediate, Advanced)")
+    learning_outcomes: List[LearningOutcome] = Field(
         default_factory=list,
         description="Các mục tiêu học tập"
     )
-    lessons_count: int = Field(..., description="Số lượng lessons trong module")
+    lessons: List[GeneratedLesson] = Field(
+        default_factory=list,
+        description="Danh sách lessons trong module"
+    )
 
 
 class CourseFromPromptResponse(BaseModel):
     """Response sau khi AI tạo khóa học"""
-    course_id: str = Field(..., description="UUID khóa học")
+    id: str = Field(..., description="UUID khóa học")
     title: str = Field(..., description="Tiêu đề khóa học do AI sinh")
     description: str = Field(..., description="Mô tả khóa học")
     category: str
     level: str
     status: str = Field(default="draft", description="Trạng thái: draft")
-    
+    owner_id: str = Field(..., description="UUID người tạo")
+    owner_type: str = Field(default="student", description="Loại người tạo")    
     modules: List[GeneratedModule] = Field(
         default_factory=list,
         description="Danh sách modules đã được AI sinh"
     )
     
-    total_modules: int = Field(..., description="Tổng số modules")
-    total_lessons: int = Field(..., description="Tổng số lessons trong tất cả modules")
-    estimated_duration_hours: float = Field(..., description="Tổng thời gian học ước tính")
-    
     message: str = Field(
-        default="Khóa học đã được tạo thành công từ AI. Bạn có thể chỉnh sửa và publish.",
+        default="Khóa học draft đã được tạo, bạn có thể chỉnh sửa trước khi xuất bản",
         description="Thông báo"
     )
     created_at: datetime

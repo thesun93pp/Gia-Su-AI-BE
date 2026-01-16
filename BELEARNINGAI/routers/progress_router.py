@@ -11,7 +11,7 @@ from controllers.progress_controller import handle_get_course_progress
 from schemas.progress import ProgressCourseResponse
 
 
-router = APIRouter(prefix="/api/v1/progress", tags=["Progress"])
+router = APIRouter(prefix="/progress", tags=["Progress"])
 
 
 @router.get(

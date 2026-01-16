@@ -42,7 +42,6 @@ MONGODB_URL=mongodb://localhost:27017
 MONGODB_DATABASE=belearning_db
 GOOGLE_API_KEY=your-google-ai-api-key-here
 JWT_SECRET_KEY=any-random-string-for-development
-CHROMA_PERSIST_DIRECTORY=./chroma_db
 ```
 
 **Get Google AI API Key:**
@@ -52,17 +51,12 @@ CHROMA_PERSIST_DIRECTORY=./chroma_db
 
 ---
 
-## Step 3: Health Check (30 giây)
-
-
 ## Step 4: Initialize Database (1 phút)
 
 ```powershell
 # Create initial data
 python scripts/init_data.py  -- python -m scripts.init_data
 
-# Create database indexes
-python scripts/create_indexes.py
 ```
 
 ---
