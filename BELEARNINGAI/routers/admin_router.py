@@ -8,7 +8,9 @@ Section 4.4: Admin Analytics (3 endpoints)
 Tổng: 17 endpoints
 """
 
-from fastapi import APIRouter, Depends, status, Query, HTTPException
+
+from fastapi import APIRouter, Depends, status, Query
+from typing import Optional
 from fastapi.responses import FileResponse
 from pathlib import Path
 from typing import Optional, Dict
@@ -50,13 +52,21 @@ from schemas.admin import (
     AdminCourseUpdateRequest,
     AdminCourseUpdateResponse,
     AdminDeleteCourseResponse,
+
+    AdminClassListResponse,
+    AdminClassDetailResponse,
+
     AdminModuleCreateRequest,
     AdminModuleCreateResponse,
     AdminLessonCreateRequest,
     AdminCreateLessonResponse,
-    AdminClassListResponse,
-    AdminClassDetailResponse,
+    
+
+    
     AdminCourseListResponse,
+
+    
+
 )
 
 
@@ -312,6 +322,7 @@ async def delete_course_admin(
     return await handle_delete_course_admin(course_id, current_user)
 
 
+
 @router.post(
     "/courses/{course_id}/modules",
     response_model=AdminModuleCreateResponse,
@@ -343,7 +354,6 @@ async def create_lesson_admin(
 ):
     """Section 4.2.7 - Tạo bài học mới (Admin)"""
     return await handle_create_lesson_admin(course_id, module_id, lesson_data, current_user)
-
 
 
 # ============================================================================
@@ -437,6 +447,5 @@ async def get_system_health(
     """Section 4.4.4 - Giám sát sức khỏe hệ thống (Admin)"""
     from controllers.dashboard_controller import handle_get_system_health
     return await handle_get_system_health(current_user)
-
 
 

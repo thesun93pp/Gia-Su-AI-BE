@@ -8,6 +8,8 @@ from datetime import datetime
 from typing import List, Optional, Literal, Dict
 
 
+
+
 class AdminUserListItem(BaseModel):
     user_id: str = Field(..., description="UUID")
     full_name: str
@@ -25,6 +27,7 @@ class UserSummary(BaseModel):
     total_users: int
     active_users: int
     new_users_this_month: int
+
 
 class AdminUserListResponse(BaseModel):
     summary: Optional[str] = None
@@ -96,6 +99,7 @@ class AdminCreateUserRequest(BaseModel):
     bio: Optional[str] = Field(None, max_length=500)
     avatar: Optional[str] = None
 
+
 class AdminCreateLessonResponse(BaseModel):
     course_id: str = Field(..., description="UUID")
     module_id: str = Field(..., description="UUID")
@@ -114,6 +118,7 @@ class AdminCreateLessonResponse(BaseModel):
     is_published: bool = Field(..., description="Bài học đã được xuất bản hay chưa")
     message: str = Field(..., description="Thông báo tạo thành công")
     
+
 class AdminCreateUserResponse(BaseModel):
     user_id: str = Field(..., description="UUID")
     full_name: str
@@ -254,6 +259,7 @@ class AdminResourceCreate(BaseModel):
     is_dowloadable: bool = Field(..., description="Có thể tải về hay không")
 
 
+
 class CourseAuthor(BaseModel):
     user_id: str = Field(..., description="UUID")
     full_name: str
@@ -299,6 +305,16 @@ class AdminCourseDetailResponse(BaseModel):
 
 class AdminCourseCreateRequest(BaseModel):
     title: str = Field(..., min_length=5, max_length=200)
+
+    description: str = Field(..., min_length=20, max_length=2000)
+    category: str
+    level: str = Field(..., description="Beginner|Intermediate|Advanced")
+    language: str = Field(default="vi")
+    thumbnail_url: Optional[str] = None
+    preview_video_url: Optional[str] = None
+    prerequisites: List[str] = Field(default_factory=list)
+    learning_outcomes: List[dict] = Field(default_factory=list)
+    status: str = Field(default="draft", description="draft|published")
     description: str = Field(..., min_length=5, max_length=2000)
     category: str
     level: str = Field(..., description="Beginner|Intermediate|Advanced")
@@ -311,6 +327,7 @@ class AdminCourseCreateRequest(BaseModel):
     
     
     
+
 
 
 class AdminCourseCreateResponse(BaseModel):
@@ -417,6 +434,7 @@ class AdminClassDetailResponse(BaseModel):
     end_date: datetime = Field(..., description="Thời gian kết thúc")
 
 
+
 # ============================================================================
 # ADMIN COURSE LIST SCHEMAS (Section 4.2)
 # ============================================================================
@@ -441,5 +459,6 @@ class AdminCourseListResponse(BaseModel):
     skip: int = Field(..., description="Pagination offset")
     limit: int = Field(..., description="Pagination limit")
    
+
 
 

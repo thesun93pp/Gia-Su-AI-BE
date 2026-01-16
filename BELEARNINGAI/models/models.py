@@ -52,6 +52,7 @@ class EmbeddedLesson(BaseModel):
     resources: List[dict] = Field(default_factory=list)
     learning_objectives: List[str] = Field(default_factory=list, description="Mục tiêu học tập của lesson")
     simulation_html: Optional[str] = None
+
     quiz_id: Optional[str] = None
     is_published: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -63,7 +64,7 @@ class EmbeddedModule(BaseModel):
     id: str = Field(default_factory=generate_uuid)
     title: str
     description: str
-    order: int
+    order: int    
     difficulty: str = "easy"
     estimated_hours: float = 0
     learning_outcomes: List[dict] = Field(default_factory=list)
@@ -224,12 +225,15 @@ class Module(Document):
     description: str = Field(..., description="Mô tả module")
     order: int = Field(..., description="Thứ tự module trong khóa học")
     difficulty: str = Field(default="easy", description="Độ khó: easy|medium|hard")
+
     estimated_hours: float = Field(default=0, description="Thời gian học ước tính (giờ)")
     
     # Learning outcomes cho module - theo LearningOutcome schema
     learning_outcomes: List[dict] = Field(default_factory=list, description="Mục tiêu học tập của module")
+
     prerequisites: List[str] = Field(default_factory=list, description="Module IDs tiên quyết")
     resources: List[dict] = Field(default_factory=list, description="Tài liệu module-level")
+
     # Learning outcome structure từ learning.py LearningOutcome: {
     #   "id": "uuid",
     #   "outcome": "Mô tả mục tiêu cụ thể",

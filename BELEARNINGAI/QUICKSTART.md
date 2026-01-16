@@ -47,7 +47,11 @@ MONGODB_DATABASE=belearning_db
 =======
 MONGODB_DATABASE=ai_learning_app
 >>>>>>> 5fab9c414bb1fc9564ff47fa7badbe660a1eb38a
+<<<<<<< HEAD
 >>>>>>> epics
+=======
+>>>>>>> origin/epics
+>>>>>>> origin/tasks/flexibilityAI
 GOOGLE_API_KEY=your-google-ai-api-key-here
 JWT_SECRET_KEY=any-random-string-for-development
 ```

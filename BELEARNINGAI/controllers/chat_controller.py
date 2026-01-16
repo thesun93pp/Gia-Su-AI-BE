@@ -122,17 +122,17 @@ async def handle_send_chat_message(
             updated_at=datetime.utcnow()
         )
         await conversation.insert()
-    
-    # Lưu user message (với ảnh nếu có)
+
     user_message = {
         "id": generate_uuid(),
         "role": "user",
         "content": request.question,
-        "timestamp": datetime.utcnow(),
-        "image_base64": request.image_base64, 
-        "image_mime_type": request.image_mime_type
+        "timestamp": datetime.utcnow()
     }
     conversation.messages.append(user_message)
+    
+   
+    
 
     # Gọi AI với course context (và ảnh nếu có)
     ai_response_text = await chat_with_course_context(
@@ -141,8 +141,10 @@ async def handle_send_chat_message(
         conversation_history=conversation.messages,
         image_base64=request.image_base64, 
         image_mime_type=request.image_mime_type 
+
     )
     
+
     # Lưu AI response
     ai_message = {
         "id": generate_uuid(),
@@ -164,8 +166,7 @@ async def handle_send_chat_message(
         sources=[],
         related_lessons=[],
         has_image=bool(request.image_base64), 
-        image_analyzed=bool(request.image_base64) 
-        
+        image_analyzed=bool(request.image_base64)        
     )
 
 

@@ -494,7 +494,11 @@ Phù hợp cho: Người mới bắt đầu lập trình, sinh viên IT, develop
         """.strip(),
 =======
         """,
+<<<<<<< HEAD
 >>>>>>> epics
+=======
+>>>>>>> origin/epics
+>>>>>>> origin/tasks/flexibilityAI
         category="Programming",
         level="Beginner",
         thumbnail_url="https://images.unsplash.com/photo-1526379095098-d400fd0bf935?w=800&h=450",
@@ -977,7 +981,11 @@ for row in matrix:
                         "code": f"# Code example for {lesson_info['title']}\\nprint('Hello from lesson {lesson_order} module {module_order}')",
 =======
                         "code": f"# Code example for {lesson_info['title']}\nprint('Hello from lesson {lesson_order} module {module_order}')",
+<<<<<<< HEAD
 >>>>>>> epics
+=======
+>>>>>>> origin/epics
+>>>>>>> origin/tasks/flexibilityAI
                         "description": f"Example code for {lesson_info['title']}"
                     }
                 ]
@@ -1374,6 +1382,7 @@ async def seed_progress(enrollment_ids: List[str]):
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 async def seed_assessment_sessions(user_ids: Dict[str, List[str]]):
     """
     Tạo dữ liệu mẫu cho các phiên đánh giá năng lực (AssessmentSession).
@@ -1464,6 +1473,11 @@ async def seed_assessment_sessions(user_ids: Dict[str, List[str]]):
 =======
 
 >>>>>>> epics
+=======
+=======
+
+>>>>>>> origin/epics
+>>>>>>> origin/tasks/flexibilityAI
 async def seed_assessment_sessions(user_ids: Dict[str, List[str]], course_ids: Dict[str, str]):
     """
     Tạo dữ liệu mẫu cho các phiên đánh giá năng lực (AssessmentSession).
@@ -2122,9 +2136,17 @@ async def main():
 >>>>>>> origin/tasks/uploadImg
 
 if __name__ == "__main__":
+<<<<<<< HEAD
     asyncio.run(main())
 =======
 
 if __name__ == "__main__":
     asyncio.run(main())
 >>>>>>> epics
+=======
+<<<<<<< HEAD
+    asyncio.run(main())
+=======
+    asyncio.run(main())
+>>>>>>> origin/epics
+>>>>>>> origin/tasks/flexibilityAI

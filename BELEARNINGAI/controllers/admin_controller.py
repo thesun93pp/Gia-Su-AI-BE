@@ -435,7 +435,6 @@ async def handle_create_course_admin(
     current_user: Dict
 ) -> AdminCourseCreateResponse:
     """
-
     4.2.3: Tạo khóa học chính thức (public course)
 
     Args:
@@ -446,6 +445,7 @@ async def handle_create_course_admin(
         AdminCourseCreateResponse với thông tin khóa học mới
     """
     try:
+
         # Validate admin
         if current_user.get("role") != "admin":
             raise HTTPException(
@@ -472,6 +472,7 @@ async def handle_create_course_admin(
             category=course_data.category,
             level=course_data.level,
             language=course_data.language,  # ✅ Add language            
+
             thumbnail_url=course_data.thumbnail_url,
             preview_video_url=course_data.preview_video_url,
             prerequisites=course_data.prerequisites,
@@ -486,9 +487,7 @@ async def handle_create_course_admin(
     except Exception as e:
         print(f"❌ Error in handle_create_course_admin: {str(e)}")  # Log to terminal
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-           
-
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,         
             detail=f"Lỗi khi tạo khóa học: {str(e)}"
         )
 
@@ -517,8 +516,6 @@ async def handle_update_course_admin(
             )
         
         update_data = course_data.dict(exclude_unset=True)
-
-        updated_course = await admin_service.update_course_admin(course_id, update_data)
 
         updated_course = await admin_service.update_course_admin(course_id, course_data.dict(exclude_unset=True))
         return AdminCourseUpdateResponse(**updated_course)
@@ -563,7 +560,6 @@ async def handle_delete_course_admin(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi khi xóa khóa học: {str(e)}"
         )
-
 async def handle_create_module_admin(
     course_id: str,
     module_data: AdminModuleCreateRequest,

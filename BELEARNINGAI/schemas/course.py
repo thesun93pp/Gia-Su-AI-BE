@@ -244,3 +244,4 @@ class CourseEnrollmentStatusResponse(BaseModel):
     progress_percent: Optional[float] = Field(None, description="Tiến độ 0-100")
 
 # endregion
+

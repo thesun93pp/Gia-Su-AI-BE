@@ -72,12 +72,14 @@ async def send_chat_message(
     message_data: ChatMessageRequest,
     current_user: dict = Depends(get_current_user)
 ):
+
     """
     Section 2.6.1 - Gửi tin nhắn chat (text + image)
 
     Hỗ trợ multimodal: Học viên có thể gửi câu hỏi kèm ảnh,
     AI sẽ phân tích cả text và image để trả lời.
     """
+
     return await handle_send_chat_message(course_id, message_data, current_user)
 
 

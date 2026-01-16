@@ -1232,4 +1232,3 @@ async def handle_create_lesson_admin(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi khi tạo lesson: {str(e)}"
         )
-

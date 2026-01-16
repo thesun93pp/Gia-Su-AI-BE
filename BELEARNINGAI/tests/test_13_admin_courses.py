@@ -171,7 +171,11 @@ class TestAdminCreateCourse:
 <<<<<<< HEAD
             "language": "vi",
 =======
+<<<<<<< HEAD
 >>>>>>> epics
+=======
+>>>>>>> origin/epics
+>>>>>>> origin/tasks/flexibilityAI
             "learning_outcomes": [
                 {
                     "description": "Master Python basics",
