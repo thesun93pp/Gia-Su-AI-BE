@@ -12,27 +12,30 @@ from models.models import (
     UserDocument,
     RefreshTokenDocument,
     PasswordResetTokenDocument,
-    
+
     # Course & Learning content
     CourseDocument,
     ModuleDocument,
     LessonDocument,
-    
+
     # Learning management
     EnrollmentDocument,
     ProgressDocument,
-    
+
     # Assessment & Quiz system
     AssessmentDocument,
     QuizDocument,
     QuizAttemptDocument,
-    
+
     # Class & Chat features
     ClassDocument,
     ChatDocument,
-    
+
     # AI Recommendation
     RecommendationDocument,
+
+    # Skill Proficiency Tracking (Cumulative Weakness Tracking)
+    SkillProficiencyTrackingDocument,
 )
 
 _settings = get_settings()
@@ -52,27 +55,30 @@ async def init_database() -> None:
             UserDocument,
             RefreshTokenDocument,
             PasswordResetTokenDocument,
-            
+
             # Course & Learning content
             CourseDocument,
             ModuleDocument,
             LessonDocument,
-            
+
             # Learning management
             EnrollmentDocument,
             ProgressDocument,
-            
+
             # Assessment & Quiz system
             AssessmentDocument,
             QuizDocument,
             QuizAttemptDocument,
-            
+
             # Class & Chat features
             ClassDocument,
             ChatDocument,
-            
+
             # AI Recommendation
             RecommendationDocument,
+
+            # Skill Proficiency Tracking (Cumulative Weakness Tracking)
+            SkillProficiencyTrackingDocument,
         ],
     )
 

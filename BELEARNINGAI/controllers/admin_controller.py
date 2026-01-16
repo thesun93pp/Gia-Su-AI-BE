@@ -26,7 +26,6 @@ from schemas.admin import (
     AdminCourseUpdateRequest,
     AdminCourseUpdateResponse,
     AdminDeleteCourseResponse,
-
     AdminModuleCreateRequest,
     AdminModuleCreateResponse,
     AdminLessonCreateRequest,
@@ -435,17 +434,10 @@ async def handle_create_course_admin(
     current_user: Dict
 ) -> AdminCourseCreateResponse:
     """
-    4.2.3: Tạo khóa học chính thức (public course)
-
-    Args:
-        course_data: Dữ liệu khóa học mới
-        current_user: Dict chứa thông tin admin từ JWT
-
-    Returns:
-        AdminCourseCreateResponse với thông tin khóa học mới
+    4.2.3: Tạo khóa học chính thức (Admin)
+    Gọi hàm create_course_admin từ service với tất cả tham số
     """
     try:
-
         # Validate admin
         if current_user.get("role") != "admin":
             raise HTTPException(
@@ -471,24 +463,23 @@ async def handle_create_course_admin(
             description=course_data.description,
             category=course_data.category,
             level=course_data.level,
-            language=course_data.language,  # ✅ Add language            
-
             thumbnail_url=course_data.thumbnail_url,
             preview_video_url=course_data.preview_video_url,
             prerequisites=course_data.prerequisites,
-            learning_outcomes=course_data.learning_outcomes,
-            status=course_data.status
+            learning_outcomes=learning_outcomes_data,
+            status=course_data.status,
+            
         )
-        return AdminCourseCreateResponse(**created_course)
-
-               
+        
+        return AdminCourseCreateResponse(**result)
+        
     except HTTPException:
         raise
     except Exception as e:
         print(f"❌ Error in handle_create_course_admin: {str(e)}")  # Log to terminal
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,         
-            detail=f"Lỗi khi tạo khóa học: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
         )
 
 
@@ -517,7 +508,7 @@ async def handle_update_course_admin(
         
         update_data = course_data.dict(exclude_unset=True)
 
-        updated_course = await admin_service.update_course_admin(course_id, course_data.dict(exclude_unset=True))
+        updated_course = await admin_service.update_course_admin(course_id, update_data)
         return AdminCourseUpdateResponse(**updated_course)
         
     except HTTPException:
@@ -560,6 +551,8 @@ async def handle_delete_course_admin(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi khi xóa khóa học: {str(e)}"
         )
+
+
 async def handle_create_module_admin(
     course_id: str,
     module_data: AdminModuleCreateRequest,
@@ -759,6 +752,9 @@ async def handle_list_courses_admin(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi khi lấy danh sách khóa học: {str(e)}"
         )
+
+
+
 
 
 # ============================================================================

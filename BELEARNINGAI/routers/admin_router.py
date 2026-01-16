@@ -8,9 +8,7 @@ Section 4.4: Admin Analytics (3 endpoints)
 Tổng: 17 endpoints
 """
 
-
-from fastapi import APIRouter, Depends, status, Query
-from typing import Optional
+from fastapi import APIRouter, Depends, status, Query, HTTPException
 from fastapi.responses import FileResponse
 from pathlib import Path
 from typing import Optional, Dict
@@ -52,21 +50,13 @@ from schemas.admin import (
     AdminCourseUpdateRequest,
     AdminCourseUpdateResponse,
     AdminDeleteCourseResponse,
-
-    AdminClassListResponse,
-    AdminClassDetailResponse,
-
     AdminModuleCreateRequest,
     AdminModuleCreateResponse,
     AdminLessonCreateRequest,
     AdminCreateLessonResponse,
-    
-
-    
     AdminCourseListResponse,
-
-    
-
+    AdminClassListResponse,
+    AdminClassDetailResponse,
 )
 
 
@@ -320,7 +310,6 @@ async def delete_course_admin(
 ):
     """Section 4.2.5 - Xóa khóa học (Admin)"""
     return await handle_delete_course_admin(course_id, current_user)
-
 
 
 @router.post(

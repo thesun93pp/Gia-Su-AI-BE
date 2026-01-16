@@ -183,6 +183,11 @@ async def add_module_to_course(
     title: str,
     description: str,
     order: int,
+    difficulty: str = "Basic",
+    estimated_hours: int = 0,
+    learning_outcomes: Optional[List[dict]] = None,
+    prerequisites: Optional[List[str]] = None,
+    resource: Optional[List[dict]] = None,
 ) -> Optional[Course]:
     """
     Thêm module vào course
@@ -193,6 +198,10 @@ async def add_module_to_course(
         description: Mô tả module
         order: Thứ tự module
         difficulty: Độ khó
+        estimated_hours: Giờ ước tính
+        learning_outcomes: Kết quả học tập
+        prerequisites: yêu cầu
+        resource: tài nguyên
         
     Returns:
         Course document đã update hoặc None
@@ -210,6 +219,11 @@ async def add_module_to_course(
         title=title,
         description=description,
         order=order,
+        difficulty=difficulty,
+        estimated_hours=estimated_hours,
+        learning_outcomes=learning_outcomes or [],
+        prerequisites=prerequisites or [],
+        resources=resource or [],
     )
     
     course.modules.append(new_module)
@@ -400,7 +414,6 @@ async def update_lesson_in_module(
         lesson_id: ID của lesson
         title, content, video_url: Fields cần update
         simulation_html: Nội dung HTML mô phỏng
-        
     Returns:
         Course document đã update hoặc None
     """
@@ -862,7 +875,10 @@ async def create_course_admin(
         learning_outcomes: List mục tiêu học tập
         status: draft|published
         modules: List of modules to be created with the course
-        """
+        
+    Returns:
+        Dict với course_id, title, status, created_by, message
+    """
     embedded_modules = []
     total_lessons = 0
     total_duration_minutes = 0

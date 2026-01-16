@@ -15,13 +15,6 @@ from typing import List, Optional, Literal
 
 class ChatMessageRequest(BaseModel):
     """Request schema cho chat message - Section 2.6.1"""
-
-    question: str = Field(..., description="Câu hỏi của học viên")
-    conversation_id: Optional[str] = Field(None, description="UUID conversation để duy trì context")
-    context_type: Optional[Literal["lesson", "module", "general"]] = Field("general", description="Loại context")
-    image_base64: Optional[str] = None
-    image_mime_type: Optional[str] = None
-
     question: str = Field(..., description="Câu hỏi của học viên", examples=["Python list comprehension là gì?"])
     conversation_id: Optional[str] = Field(None, description="UUID conversation để duy trì context")
     context_type: Optional[Literal["lesson", "module", "general"]] = Field("general", description="Loại context")

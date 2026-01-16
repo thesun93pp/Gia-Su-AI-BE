@@ -52,7 +52,6 @@ class EmbeddedLesson(BaseModel):
     resources: List[dict] = Field(default_factory=list)
     learning_objectives: List[str] = Field(default_factory=list, description="Mục tiêu học tập của lesson")
     simulation_html: Optional[str] = None
-
     quiz_id: Optional[str] = None
     is_published: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -64,7 +63,7 @@ class EmbeddedModule(BaseModel):
     id: str = Field(default_factory=generate_uuid)
     title: str
     description: str
-    order: int    
+    order: int
     difficulty: str = "easy"
     estimated_hours: float = 0
     learning_outcomes: List[dict] = Field(default_factory=list)
@@ -225,15 +224,12 @@ class Module(Document):
     description: str = Field(..., description="Mô tả module")
     order: int = Field(..., description="Thứ tự module trong khóa học")
     difficulty: str = Field(default="easy", description="Độ khó: easy|medium|hard")
-
     estimated_hours: float = Field(default=0, description="Thời gian học ước tính (giờ)")
     
     # Learning outcomes cho module - theo LearningOutcome schema
     learning_outcomes: List[dict] = Field(default_factory=list, description="Mục tiêu học tập của module")
-
     prerequisites: List[str] = Field(default_factory=list, description="Module IDs tiên quyết")
     resources: List[dict] = Field(default_factory=list, description="Tài liệu module-level")
-
     # Learning outcome structure từ learning.py LearningOutcome: {
     #   "id": "uuid",
     #   "outcome": "Mô tả mục tiêu cụ thể",
@@ -516,13 +512,14 @@ class Quiz(Document):
     # Question structure từ quiz.py QuestionCreate: {
     #   "id": "uuid",
     #   "type": "multiple_choice|fill_in_blank|true_false",
-    #   "question_text": "nội dung câu hỏi", 
+    #   "question_text": "nội dung câu hỏi",
     #   "options": ["A", "B", "C", "D"] or null,  # null nếu không phải multiple_choice
     #   "correct_answer": "đáp án đúng",
     #   "explanation": "giải thích tại sao đáp án này đúng" or null,
     #   "points": int,  # điểm cho câu hỏi này (>=1)
     #   "is_mandatory": boolean,  # câu bắt buộc phải đúng
-    #   "order": int  # thứ tự câu hỏi trong quiz
+    #   "order": int,  # thứ tự câu hỏi trong quiz
+    #   "skill_tag": str or null  # OPTIONAL: skill tag cho cumulative tracking (python-loops, python-functions, ...)
     # }
     
     # Thống kê quiz - cho QuizDetailResponse
@@ -866,6 +863,137 @@ class PasswordResetTokenDocument(Document):
     expires_at: datetime
     used: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    
+
     class Settings:
         name = "password_reset_tokens"
+
+
+# ============================================================================
+# SKILL PROFICIENCY TRACKING MODEL (Cumulative Weakness Tracking)
+# ============================================================================
+
+class SkillAttemptHistory(BaseModel):
+    """
+    Lịch sử một lần attempt cho skill
+    Embedded trong SkillProficiencyTracking.attempt_history
+    """
+    quiz_id: str = Field(..., description="UUID quiz")
+    quiz_attempt_id: str = Field(..., description="UUID quiz attempt")
+    quiz_title: Optional[str] = Field(None, description="Tên quiz")
+    module_id: Optional[str] = Field(None, description="UUID module (nếu có)")
+    lesson_id: Optional[str] = Field(None, description="UUID lesson (nếu có)")
+
+    # Kết quả cho skill này trong quiz attempt
+    questions_count: int = Field(..., description="Số câu hỏi về skill này trong quiz")
+    correct_count: int = Field(..., description="Số câu trả lời đúng")
+    wrong_count: int = Field(..., description="Số câu trả lời sai")
+    proficiency: float = Field(..., description="Proficiency % trong lần này (0-100)")
+
+    # Metadata
+    attempted_at: datetime = Field(default_factory=datetime.utcnow, description="Thời gian làm quiz")
+    wrong_question_ids: List[str] = Field(default_factory=list, description="Danh sách question_id sai")
+
+
+class SkillProficiencyTracking(Document):
+    """
+    Cumulative Skill Proficiency Tracking
+    Collection: skill_proficiency_tracking
+
+    Track điểm yếu tích lũy của học viên qua nhiều quiz attempts.
+    Mỗi document = 1 skill của 1 user trong 1 course.
+
+    Use cases:
+    - Phát hiện điểm yếu kinh niên (sai nhiều lần liên tiếp)
+    - Phân tích xu hướng cải thiện/xấu đi
+    - Đề xuất lessons cần review ưu tiên
+    - Dashboard skill gaps
+    """
+    id: str = Field(default_factory=generate_uuid, alias="_id")
+    user_id: str = Field(..., description="UUID user")
+    course_id: str = Field(..., description="UUID course")
+    skill_tag: str = Field(..., description="Skill tag (python-loops, python-functions, ...)")
+
+    # ========== CUMULATIVE STATS ==========
+    total_questions: int = Field(default=0, description="Tổng số câu hỏi về skill này đã gặp")
+    total_correct: int = Field(default=0, description="Tổng số câu trả lời đúng")
+    total_wrong: int = Field(default=0, description="Tổng số câu trả lời sai")
+    current_proficiency: float = Field(default=0.0, description="Proficiency hiện tại (0-100)")
+
+    # ========== ATTEMPT HISTORY ==========
+    attempt_history: List[SkillAttemptHistory] = Field(
+        default_factory=list,
+        description="Lịch sử các lần làm quiz có skill này. Sorted by attempted_at DESC"
+    )
+    total_attempts: int = Field(default=0, description="Tổng số lần làm quiz có skill này")
+
+    # ========== TREND ANALYSIS ==========
+    trend: str = Field(
+        default="stable",
+        description="Xu hướng: improving|declining|stable|fluctuating"
+    )
+    trend_rate: float = Field(
+        default=0.0,
+        description="Tốc độ thay đổi proficiency (% change per attempt). Positive = improving, Negative = declining"
+    )
+    last_3_attempts_avg: float = Field(
+        default=0.0,
+        description="Proficiency trung bình 3 lần gần nhất (để tính trend)"
+    )
+
+    # ========== WEAKNESS DETECTION ==========
+    is_weak_skill: bool = Field(
+        default=False,
+        description="Có phải điểm yếu không (proficiency < 60% và attempts >= 2)"
+    )
+    is_chronic_weakness: bool = Field(
+        default=False,
+        description="Điểm yếu kinh niên (proficiency < 60% và attempts >= 3)"
+    )
+    consecutive_fails: int = Field(
+        default=0,
+        description="Số lần sai liên tiếp (proficiency < 60%)"
+    )
+
+    # ========== RECOMMENDATIONS ==========
+    recommended_lessons: List[str] = Field(
+        default_factory=list,
+        description="Danh sách lesson_id được đề xuất review cho skill này"
+    )
+    priority_level: str = Field(
+        default="low",
+        description="Mức độ ưu tiên review: urgent|high|medium|low"
+    )
+
+    # ========== TIMESTAMPS ==========
+    first_seen: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Lần đầu gặp skill này"
+    )
+    last_updated: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Lần cuối cập nhật"
+    )
+    last_attempt_at: Optional[datetime] = Field(
+        None,
+        description="Thời gian làm quiz gần nhất có skill này"
+    )
+
+    class Settings:
+        name = "skill_proficiency_tracking"
+        indexes = [
+            "user_id",
+            "course_id",
+            "skill_tag",
+            "is_weak_skill",
+            "is_chronic_weakness",
+            "priority_level",
+            "last_updated",
+            [("user_id", 1), ("course_id", 1)],  # Get all skills của user trong course
+            [("user_id", 1), ("course_id", 1), ("skill_tag", 1)],  # Unique constraint
+            [("user_id", 1), ("is_weak_skill", 1)],  # Get weak skills của user
+            [("user_id", 1), ("course_id", 1), ("priority_level", 1)],  # Get by priority
+        ]
+
+
+# Alias for SkillProficiencyTracking
+SkillProficiencyTrackingDocument = SkillProficiencyTracking

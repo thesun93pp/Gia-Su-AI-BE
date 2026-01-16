@@ -6,6 +6,7 @@ Section 2.5.1-2.5.5
 
 from typing import Dict, List, Optional
 from datetime import datetime
+from models.models import Module, Lesson
 
 from models.models import Course, EmbeddedModule, EmbeddedLesson, generate_uuid
 from services.ai_service import generate_course_from_prompt
