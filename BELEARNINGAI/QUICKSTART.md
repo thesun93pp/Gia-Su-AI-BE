@@ -63,19 +63,9 @@ JWT_SECRET_KEY=any-random-string-for-development
 
 ---
 
-<<<<<<< HEAD
-## Step 4: Initialize Database (1 phút)
 
-```powershell
-# Create initial data
-python scripts/init_data.py  -- python -m scripts.init_data
 
-```
 
----
-=======
-
->>>>>>> epics
 
 ## Step 5: Start Server (30 giây)
 
