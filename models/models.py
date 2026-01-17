@@ -124,6 +124,49 @@ class User(Document):
             "last_login_at"
         ]
 
+class Users(Document):
+    """
+    Model người dùng cho hệ thống
+    Collection: users
+    Tuân thủ: API_SCHEMA.md (1.1-1.5), user.py schema
+    """
+    id: str = Field(default_factory=generate_uuid, alias="_id")
+    full_name: str = Field(..., min_length=2, max_length=100, description="Tên đầy đủ (tối thiểu 2 từ)")
+    email: EmailStr = Field(..., description="Email unique trong hệ thống")
+    hashed_password: str = Field(..., description="Mật khẩu đã hash")
+    role: str = Field(default="student", description="student|instructor|admin")
+    status: str = Field(default="active", description="active|inactive|suspended")
+    
+    # Thông tin tùy chọn - theo UserProfileResponse schema
+    avatar_url: Optional[str] = Field(None, description="URL ảnh đại diện, có thể null")
+    bio: Optional[str] = Field(None, max_length=500, description="Mô tả bản thân (tối đa 500 ký tự), có thể null")
+    contact_info: Optional[str] = Field(None, max_length=200, description="Thông tin liên hệ, có thể null")
+    learning_preferences: List[str] = Field(
+        default_factory=list, 
+        description="Danh sách sở thích học tập: Programming, Math, Business, Languages..."
+    )
+    
+    # Authentication tracking - theo API schema
+    last_login_at: Optional[datetime] = Field(None, description="Lần đăng nhập cuối")
+    email_verified: bool = Field(default=False, description="Email đã xác thực chưa")
+    phone_verified: bool = Field(default=False, description="Số điện thoại đã xác thực chưa")
+    
+    # Admin fields - cho chức năng admin tạo user
+    created_by: Optional[str] = Field(None, description="Admin ID who created this user")
+    
+    # Metadata
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Ngày tạo tài khoản")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Lần cập nhật cuối")
+    
+    class Settings:
+        name = "user"
+        indexes = [
+            [("email", 1)],  # Unique email
+            "role",
+            "status",
+            "created_at",
+            "last_login_at"
+        ]
 
 # ============================================================================
 # REFRESH TOKEN MODEL

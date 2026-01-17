@@ -1,98 +1,147 @@
-# BELEARNINGAI Quickstart Guide
- **Updated: 2025-10-16**
+# Gia-Su-AI Backend - Quickstart Guide
+
+**Updated: 2025-01-17**
 
 ## Prerequisites
 
 - Python 3.11+
-- MongoDB running (local hoặc Atlas)
+- MongoDB (local hoặc Atlas)
 - Google AI API key
+- Git
 
 ---
 
-## Step 1: Clone & Setup 
+## Step 1: Clone Repository
+
+```bash
+git clone <repository-url>
+cd Gia-Su-AI-BE
+```
+
+---
+
+## Step 2: Setup Virtual Environment
+
 ```powershell
-# Clone repo
-cd BELEARNINGAI
-
-# Create virtual environment
+# Windows
 python -m venv venv
-venv\Scripts\activate  # Windows
-# source venv/bin/activate  # Linux/Mac
+venv\Scripts\activate
 
-# Install dependencies
+# Linux/Mac
+python3 -m venv venv
+source venv/bin/activate
+```
+
+---
+
+## Step 3: Install Dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
 ---
 
-## Step 2: Configuration
+## Step 4: Configure Environment Variables
 
 ```powershell
-# Copy environment file
+# Copy environment template
 copy .env.example .env
 
-# Edit .env với text editor
+# Edit .env file
 notepad .env  # Windows
-# nano .env   # Linux
+# nano .env   # Linux/Mac
 ```
 
-**Minimum required:**
+**Required environment variables:**
 ```env
 MONGODB_URL=mongodb://localhost:27017
-<<<<<<< HEAD
 MONGODB_DATABASE=belearning_db
-=======
-<<<<<<< HEAD
-MONGODB_DATABASE=belearning_db
-=======
-MONGODB_DATABASE=ai_learning_app
->>>>>>> 5fab9c414bb1fc9564ff47fa7badbe660a1eb38a
-<<<<<<< HEAD
->>>>>>> epics
-=======
->>>>>>> origin/epics
->>>>>>> origin/tasks/flexibilityAI
 GOOGLE_API_KEY=your-google-ai-api-key-here
-JWT_SECRET_KEY=any-random-string-for-development
+JWT_SECRET_KEY=your-random-secret-key-for-development
 ```
 
 **Get Google AI API Key:**
 1. Visit: https://aistudio.google.com/app/apikey
-2. Create new key
-3. Copy vào `.env`
+2. Click "Create new API key"
+3. Copy the key to your `.env` file
 
 ---
 
+## Step 5: Initialize Database (Optional)
 
+```bash
+python scripts/init_data.py
+python scripts/create_indexes.py
+```
 
-## Step 5: Start Server (30 giây)
+---
+
+## Step 6: Start Server
 
 ```powershell
 uvicorn app.main:app --reload
 ```
 
-**Server running at:**
-- **API**: http://localhost:8000       //đường dẫn cho API chính, nơi FE gọi 
-
-- **Swagger UI**: http://localhost:8000/docs ⭐   //đường dẫn cho tài liệu API tương tác ,Mô tả rõ từng endpoint: method (GET, POST, PUT…), params, response schema, status code. Nơi FE đọc để biết endpoint nào cần gọi, input/output ra sao.
-
-- **ReDoc**: http://localhost:8000/redoc       //Giao diện documentation chỉ đọc
-
-- **Health**: http://localhost:8000/health     //Kiểm tra nhanh trạng thái server.
+Server will be running at:
+- **API**: http://localhost:8000
+- **Swagger UI**: http://localhost:8000/docs ⭐ (Interactive API documentation)
+- **ReDoc**: http://localhost:8000/redoc (Read-only API documentation)
+- **Health Check**: http://localhost:8000/health
 
 ---
 
----
-
-### Using Swagger UI
+## Testing API with Swagger UI
 
 1. Open http://localhost:8000/docs
-2. Click "Authorize" button
-3. Register user via `/auth/register`
-4. Login via `/auth/login` → copy token
+2. Click the **"Authorize"** button (top-right)
+3. Register a new user:
+   - Find `/auth/register` endpoint
+   - Enter username, email, password
+   - Click "Execute"
+4. Login to get JWT token:
+   - Find `/auth/login` endpoint
+   - Enter credentials
+   - Copy the token from response
 5. Paste token in "Authorize" dialog
-6. Now can test protected endpoints!
+6. Now you can test protected endpoints!
 
+---
+
+## Troubleshooting
+
+**MongoDB Connection Error:**
+- Ensure MongoDB is running locally or check your Atlas connection string in `.env`
+
+**API Key Error:**
+- Verify `GOOGLE_API_KEY` is correctly set in `.env`
+- Restart the server after updating `.env`
+
+**Module Import Error:**
+- Ensure virtual environment is activated
+- Run `pip install -r requirements.txt` again
+
+---
+
+## Project Structure
+
+- `app/` - Main application entry point
+- `controllers/` - API endpoint handlers
+- `routers/` - API route definitions
+- `services/` - Business logic
+- `schemas/` - Pydantic data models
+- `models/` - Database models
+- `middleware/` - Authentication & RBAC
+- `config/` - Configuration files
+- `scripts/` - Utility scripts
+
+---
+
+## Next Steps
+
+- Read [TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for testing procedures
+- Check controller files for available endpoints
+- Review services for business logic implementation
 
 ---
 
