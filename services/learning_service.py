@@ -294,10 +294,15 @@ async def get_lesson_content(
         }
     
     # Lấy quiz info chi tiết
+    # Prefer quiz document linked by lesson_id; fall back to lesson.quiz_id if provided
     quiz = await Quiz.find_one(Quiz.lesson_id == str(lesson_id))
-    has_quiz = quiz is not None
+    if not quiz and getattr(lesson, "quiz_id", None):
+        quiz = await Quiz.get(str(getattr(lesson, "quiz_id")))
+
+    quiz_id_value = str(quiz.id) if quiz else getattr(lesson, "quiz_id", None)
+    has_quiz = quiz is not None or quiz_id_value is not None
     quiz_info = {
-        "quiz_id": str(quiz.id) if quiz else None,
+        "quiz_id": quiz_id_value,
         "question_count": len(quiz.questions) if quiz else None,
         "is_mandatory": True if quiz else None  # Default mandatory
     }
